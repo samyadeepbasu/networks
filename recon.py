@@ -118,7 +118,7 @@ def create_model(state_matrix,transcription_factors):
 
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
-		forest_regressor = RandomForestRegressor(n_estimators = 150,criterion = 'mse',n_jobs = -1)
+		forest_regressor = RandomForestRegressor(n_estimators = 100,criterion = 'mse',n_jobs = -1)
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -229,18 +229,8 @@ def generate_PR_score(regulators,transcription_factors,real_interactions):
 		recall.append(float(common)/float(len(real_interactions)))
 		fpr.append(float(len(top_regulators) - common) / float(10000 - len(real_interactions)))
 
-
-		#false_positive_rate = float(len(top_regulators) - len(common)) / float(len(top_regulators) - len(common)) + float(len(real_interactions) - len(common))
-		#fpr.append(false_positive_rate)
-		
-		#print float(common) / float(len(real_interactions))
-		#print false_positive_rate
 		
 		print common
-		#print float(common) / float(len(top_regulators))
-		#print len(top_regulators)
-		#print "#"		
-
 
 
 		threshold += 0.00025
@@ -302,6 +292,9 @@ def main():
 	#Extraction of list of transcription factors and the Gene Expression Matrix
 	transcription_factors, data_matrix = create_data_matrix()
 
+
+	""" Commented : States without Clustering cells at the same time points  """
+
 	#Order the Matrix by Pseudo Time
 	##ordered_matrix = pseudo_time(data_matrix)
 
@@ -313,9 +306,9 @@ def main():
 	#Create the Equations for Model
 	#state_matrix = create_states(normalized_matrix,transcription_factors,5)
 
+	
+    #State Matrix Formed by clustering the cells at same time points
 	state_matrix = clustered_state(360)
-
-
 
 	#Fit the model using Random Forests and Lasso Regression -- Returns a dictionary containing feature score for each gene
 	regulators = create_model(state_matrix,transcription_factors)
@@ -332,28 +325,16 @@ def main():
 
 	#update_step = (max_threshold - min_threshold) / 500
 
+    #Ground Truth for comparison
 	real_interactions = ground_truth()
 	
 	#Get the Precision Recall scores for different threshold values and parameters
-	scores = generate_PR_score(regulators,transcription_factors,real_interactions)
-
-
-
-
-
-
-
-
-
-
-
-	
-	
+	scores = generate_PR_score(regulators,transcription_factors,real_interactions)	
 	
 
 
 
-
+#Main Function Call
 main()
 
 
