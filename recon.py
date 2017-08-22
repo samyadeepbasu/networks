@@ -8,7 +8,6 @@ import math
 import openpyxl as px
 import numpy as np
 import pandas as pd
-from autoencoder import AutoEncoder
 import matplotlib.pyplot as plt 
 from sklearn.decomposition import PCA, KernelPCA
 from sklearn.cluster import KMeans
