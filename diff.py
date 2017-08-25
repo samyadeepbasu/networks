@@ -1,4 +1,4 @@
-""" Modelling Expression using Differential Equation """
+""" Modelling Expression using Differential Equation and the features are selected using Random Forests  """
 
 
 #Libraries
@@ -79,7 +79,7 @@ def create_model(state_matrix,transcription_factors):
 			#The output value is the difference / rate of change of expression
 			y.append(state_matrix[j][i] - state_matrix[j-1][i])
 
-        #Copy the list of Transcription Factors
+		#Copy the list of Transcription Factors
 		tf_copy = list(transcription_factors)
 
 		#Remove the current transcription factor
@@ -91,7 +91,7 @@ def create_model(state_matrix,transcription_factors):
 		""" Feature Selection using Random Forests """
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
-		forest_regressor = RandomForestRegressor(n_estimators = 2,criterion = 'mse')
+		forest_regressor = RandomForestRegressor(n_estimators = 1000,criterion = 'mse')
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -107,6 +107,131 @@ def create_model(state_matrix,transcription_factors):
 	return regulators
 
 
+#Function to implement the Least Angle Regressional Model : Assumption=> Genes are regulated by a linear combination
+#Extract the Top Regulators for Each Gene
+def create_model_LARS(state_matrix,transcription_factors):
+	regulators = {}
+
+	for i in range(0,len(transcription_factors)):
+		#Create the training set
+		X = []
+		y = []
+		for j in range(1,len(state_matrix)):
+			#Append the expression level of the previous step
+			X.append(state_matrix[j-1].tolist())
+
+			#The output value is the difference / rate of change of expression
+			y.append(state_matrix[j][i] - state_matrix[j-1][i])
+
+		#Copy the list of Transcription Factors
+		tf_copy = list(transcription_factors)
+
+		#Remove the current transcription factor
+		tf_copy.remove(tf_copy[i])
+
+		#Remove the corresponding column from the training set
+		[expression.remove(expression[i]) for expression in X]
+
+		""" Feature Selection using Least Angle Regression """
+
+		#Initialise the model using Least Angle Regression
+		lars = Lars()
+
+		#Fit the training data into the Model
+		lars.fit(X,y)
+
+		#Extract the important features corresponding to a particular gene
+		coefficients = lars.coef_
+
+		#Regulators for the Network
+		regulators[transcription_factors[i]] = coefficients	
+		
+
+	
+	return regulators
+
+
+
+#Function to extract the threshold
+def get_threshold(regulators,t):
+	threshold = []
+
+	for key,value in regulators.items():
+		threshold += value.tolist()
+
+
+	sorted_threshold = sorted(threshold)
+
+	return sorted_threshold[t]
+
+
+def top_regulators(regulators,threshold,transcription_factors):
+
+	edges = []
+
+	
+	for key,value in regulators.items():
+		#Regulation Values for the current gene
+		reg = value
+
+		#Transcription Factors
+		tf_temp = list(transcription_factors)
+		tf_temp.remove(key)
+
+		temp = [tf_temp[j] for j in range(0,len(reg)) if reg[j]>threshold]
+
+		indexes = [(transcription_factors.index(key),transcription_factors.index(tf)) for tf in temp]
+
+		edges += indexes		
+		#print len(reg)
+
+
+
+	return edges
+
+#Function to get the ground truth for the dataset
+def ground_truth():
+	#Open and Initialise the File
+	g_file = open('ground_truth/stamlab_for_data2.txt','r')
+
+	#Conversion of the interactions in appropriate format  -- Target,Regulator
+	interactions = [ (int(line.split()[2]),int(line.split()[3])) for line in g_file.readlines()]
+	
+	return interactions
+
+
+#Function to generate the AUPR Graph and Score / AUC Graph and Score
+def get_graph(edges,ground_truth):
+	
+	common = 0
+
+	for e in ground_truth:
+		for edge in edges:
+			if e[0] == edge[0] and e[1]==edge[1]:
+				common += 1
+
+	#
+	
+	precision = float(common) / len(edges)
+	recall = float(common) / len(ground_truth)
+	fpr = (float(len(edges)) - float(common)) / float(9900 - len(ground_truth))
+
+	return precision,recall,fpr
+	
+
+
+#Function to normalise the state matrix to consolidate all gene expression values from 0 to 1
+def normalise(state_matrix):
+	#Normalise the matrix 
+	matrix = np.array([ (item - np.min(item))/(np.max(item) - np.min(item)) for item in state_matrix])
+
+	return matrix
+
+def area(fpr,recall):
+
+	return metrics.auc(fpr,recall)
+
+
 def main():
 	#Transcription Factors and Data Matrix
 	transcription_factors, data_matrix = create_data_matrix()
@@ -116,9 +241,50 @@ def main():
 
 	#Transpose the matrix 
 	state_matrix = ordered_matrix.transpose()
-    
-    #Churn out the top regulators from each gene
-	regulators = create_model(state_matrix,transcription_factors)
+
+	#Normalise the matrix
+	normalised_state_matrix = normalise(state_matrix)
+	
+	#Churn out the top regulators from each gene
+	regulators = create_model_LARS(normalised_state_matrix,transcription_factors)
+
+	
+	start = 1
+
+	precisions = []
+	recalls = []
+	fprs = []
+
+	i = start
+
+	while i <=9890:
+		threshold = get_threshold(regulators,i)
+
+		edges = top_regulators(regulators,threshold,transcription_factors)
+
+		real_interactions = ground_truth()
+
+		precision,recall,fpr = get_graph(edges,real_interactions)
+
+		precisions.append(precision)
+		recalls.append(recall)
+		fprs.append(fpr)
+		print i 
+		i += 8
+
+	print area(np.array(fprs),np.array(recalls))
+
+	print area(np.array(recalls),np.array(precisions))
+	
+	#AUC Curve
+	#plt.figure(1)
+	#plt.plot(np.array(fprs),np.array(recalls))
+	#plt.show()
+
+    #AUPR Curve
+	plt.plot(np.array(recalls),np.array(precisions))
+	plt.show()
+
 
 
 
