@@ -91,7 +91,7 @@ def create_model(state_matrix,transcription_factors):
 		""" Feature Selection using Random Forests """
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
-		forest_regressor = RandomForestRegressor(n_estimators = 1000,criterion = 'mse')
+		forest_regressor = RandomForestRegressor(n_estimators = 100,criterion = 'mse')
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
