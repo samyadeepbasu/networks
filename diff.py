@@ -11,7 +11,7 @@ from sklearn.decomposition import PCA, KernelPCA
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, silhouette_samples
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor,ExtraTreesRegressor
 from sklearn import metrics
 import networkx as nx
 from noise_reduction import clustered_state
@@ -46,7 +46,6 @@ def pseudo_time(data_matrix):
 	#Extraction of Pseudo Time from the List
 	ordered_cells = [line.split()[1] for line in time_file.readlines()]
 
-
 	#Convert into Numpy Array
 	ordered_cells = np.array(ordered_cells)
 
@@ -64,8 +63,24 @@ def pseudo_time(data_matrix):
 	
 	return new_matrix
 
+
+#Function to get a list of times
+def time():
+	#Time Measurements
+	time_series = open('data2/time.txt','r')
+
+	times = [line.split()[1] for line in time_series.readlines()]
+
+	sorted_time = np.sort(np.array(times).astype(float))
+
+	#Normalise
+	normalised_time = (sorted_time - np.min(sorted_time)) / (np.max(sorted_time) - np.min(sorted_time))
+
+	return normalised_time
+
+
 #Extract the Top Regulators for Each Gene
-def create_model(state_matrix,transcription_factors):
+def create_model(state_matrix,transcription_factors,time_series):
 	regulators = {}
 
 	for i in range(0,len(transcription_factors)):
@@ -74,7 +89,8 @@ def create_model(state_matrix,transcription_factors):
 		y = []
 		for j in range(1,len(state_matrix)):
 			#Append the expression level of the previous step
-			X.append(state_matrix[j-1].tolist())
+			#X.append(state_matrix[j-1].tolist())
+			X.append((state_matrix[j-1]*(time_series[j] - time_series[j-1])).tolist())  #Taking dt into account
 
 			#The output value is the difference / rate of change of expression
 			y.append(state_matrix[j][i] - state_matrix[j-1][i])
@@ -91,7 +107,8 @@ def create_model(state_matrix,transcription_factors):
 		""" Feature Selection using Random Forests """
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
-		forest_regressor = RandomForestRegressor(n_estimators = 100,criterion = 'mse')
+		#forest_regressor = RandomForestRegressor(n_estimators = 100,criterion = 'mse')
+		forest_regressor = ExtraTreesRegressor(n_estimators = 1000,max_features= 'sqrt',criterion = 'mse')   #Extra Trees - Randomized Splits
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -244,9 +261,13 @@ def main():
 
 	#Normalise the matrix
 	normalised_state_matrix = normalise(state_matrix)
+
+	time_series = time()
+
+	
 	
 	#Churn out the top regulators from each gene
-	regulators = create_model_LARS(normalised_state_matrix,transcription_factors)
+	regulators = create_model(normalised_state_matrix,transcription_factors,time_series)
 
 	
 	start = 1
@@ -276,15 +297,16 @@ def main():
 
 	print area(np.array(recalls),np.array(precisions))
 	
-	#AUC Curve
+	#AUROC Curve
 	#plt.figure(1)
-	#plt.plot(np.array(fprs),np.array(recalls))
-	#plt.show()
+	plt.plot(np.array(fprs),np.array(recalls))
+	plt.show()
 
     #AUPR Curve
 	plt.plot(np.array(recalls),np.array(precisions))
 	plt.show()
 
+	
 
 
 
