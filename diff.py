@@ -16,6 +16,7 @@ from sklearn import metrics
 import networkx as nx
 from noise_reduction import clustered_state
 from sklearn.linear_model import Lars
+from numpy import inf
 
 
 #Function to Clean the data and create a training set
@@ -104,11 +105,11 @@ def create_model(state_matrix,transcription_factors,time_series):
 		#Remove the corresponding column from the training set
 		[expression.remove(expression[i]) for expression in X]
 
-		""" Feature Selection using Random Forests """
+		""" Feature Selection using Random Forests / Extra Trees """
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
 		#forest_regressor = RandomForestRegressor(n_estimators = 100,criterion = 'mse')
-		forest_regressor = ExtraTreesRegressor(n_estimators = 1000,max_features= 'sqrt',criterion = 'mse')   #Extra Trees - Randomized Splits
+		forest_regressor = ExtraTreesRegressor(n_estimators = 1000 ,criterion = 'mse')   #Extra Trees - Randomized Splits
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -240,9 +241,17 @@ def get_graph(edges,ground_truth):
 #Function to normalise the state matrix to consolidate all gene expression values from 0 to 1
 def normalise(state_matrix):
 	#Normalise the matrix 
-	matrix = np.array([ (item - np.min(item))/(np.max(item) - np.min(item)) for item in state_matrix])
+	#matrix = np.array([ (item - np.min(item))/(np.max(item) - np.min(item)) for item in state_matrix])
+
+	#Normalise along the columns
+	temp_matrix = state_matrix.transpose()
+
+	matrix = np.array([ (item - np.min(item))/(np.max(item) - np.min(item)) for item in temp_matrix])
+
+	matrix = matrix.transpose()
 
 	return matrix
+
 
 def area(fpr,recall):
 
@@ -258,13 +267,19 @@ def main():
 
 	#Transpose the matrix 
 	state_matrix = ordered_matrix.transpose()
+    
+    #Conversion into log
+	state_matrix = np.log(state_matrix)
+
+	#Replace -infinity values with zero    
+	state_matrix[state_matrix == -inf] = 0
+
+	#print state_matrix
 
 	#Normalise the matrix
 	normalised_state_matrix = normalise(state_matrix)
 
-	time_series = time()
-
-	
+	time_series = time()	
 	
 	#Churn out the top regulators from each gene
 	regulators = create_model(normalised_state_matrix,transcription_factors,time_series)
