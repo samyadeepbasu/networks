@@ -7,11 +7,11 @@ import openpyxl as px
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt 
-from sklearn.decomposition import PCA, KernelPCA
+from sklearn.decomposition import FactorAnalysis
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score, silhouette_samples
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.ensemble import RandomForestRegressor,ExtraTreesRegressor
+from sklearn.ensemble import RandomForestRegressor,ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn import metrics
 import networkx as nx
 from noise_reduction import clustered_state
@@ -109,7 +109,9 @@ def create_model(state_matrix,transcription_factors,time_series):
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
 		#forest_regressor = RandomForestRegressor(n_estimators = 100,criterion = 'mse')
-		forest_regressor = ExtraTreesRegressor(n_estimators = 1000 ,criterion = 'mse')   #Extra Trees - Randomized Splits
+		#forest_regressor = ExtraTreesRegressor(n_estimators = 1500 ,criterion = 'mse')   #Extra Trees - Randomized Splits
+
+		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.075,n_estimators=2000) #Gradient Boosting with Friedman MSE
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
