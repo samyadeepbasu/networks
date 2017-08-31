@@ -1,4 +1,4 @@
-""" Modelling Expression using Differential Equation and the features are selected using Random Forests  """
+""" Baseline Learning Model for reconstruction of regulatory networks using Gradient Boosting  """
 
 
 #Libraries
@@ -108,10 +108,10 @@ def create_model(state_matrix,transcription_factors,time_series):
 		""" Feature Selection using Random Forests / Extra Trees """
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
-		#forest_regressor = RandomForestRegressor(n_estimators = 100,criterion = 'mse')
-		#forest_regressor = ExtraTreesRegressor(n_estimators = 1500 ,criterion = 'mse')   #Extra Trees - Randomized Splits
+		forest_regressor = RandomForestRegressor(n_estimators = 700,criterion = 'mse')
+		#forest_regressor = ExtraTreesRegressor(n_estimators = 1000 ,criterion = 'mse')   #Extra Trees - Randomized Splits
 
-		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.075,n_estimators=2000) #Gradient Boosting with Friedman MSE
+		#forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.075,n_estimators=1600) #Gradient Boosting with Friedman MSE
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -254,10 +254,86 @@ def normalise(state_matrix):
 
 	return matrix
 
-
+#Area under Curve
 def area(fpr,recall):
 
 	return metrics.auc(fpr,recall)
+
+
+#Input Dropouts with average expression in the cell
+def impute(matrix):	
+	mean = []
+	count = 0
+	for i in range(0,len(matrix)):
+		#Get the average of the expressions
+		mean_expression = np.mean(matrix[i])
+
+		#Replace zeros with average expression values
+		matrix[i][matrix[i] == 0] = mean_expression
+
+		count += np.count_nonzero(matrix[i] == 0)
+
+
+	return matrix
+
+
+""" Binning for creating clusters """
+
+def binning(state_matrix, times, k): #Time Passed is sorted
+	#Cluster the time points
+	cluster = KMeans(n_clusters=k,init='k-means++')
+	
+	#Convert into matrix for K-means
+	time_matrix = np.array([[time] for time in times])
+	
+	#Labels for the clusters
+	labels = cluster.fit_predict(time_matrix)
+
+	
+	#Unique Labels
+	ranges = []
+	for i in range(0,len(labels)-1):
+		if labels[i+1] != labels[i]:
+			ranges.append(i)
+
+
+
+	start = 0
+	end = len(labels)
+
+	#Create Bins for Clustering the states
+	bins = []
+
+	for i in range(len(ranges)):
+		bins.append((start,ranges[i]+1))
+		start = ranges[i]+1
+	
+	#Append the last one
+	bins.append((start,end))
+
+	""" Averaging out the states """
+	
+	new_state_matrix = []
+	total = 0
+	for bin in bins:
+		temp_matrix = state_matrix[bin[0]:bin[1]]
+		#Average out the expression levels for each gene
+		temp = []
+
+		
+		for i in range(0,len(temp_matrix[0])):
+			temp.append(np.mean(temp_matrix[:,i]))
+
+
+		new_state_matrix.append(temp)
+
+
+	
+	new_state_matrix = np.array(new_state_matrix)
+
+	return new_state_matrix
+
+	
 
 
 def main():
@@ -269,19 +345,30 @@ def main():
 
 	#Transpose the matrix 
 	state_matrix = ordered_matrix.transpose()
-    
-    #Conversion into log
+
+	time_series = time()	
+
+	binning(state_matrix,time_series,300)
+
+	#Impute in the matrix
+	#state_matrix = impute(state_matrix)
+	
+	#Conversion into log
 	state_matrix = np.log(state_matrix)
 
 	#Replace -infinity values with zero    
 	state_matrix[state_matrix == -inf] = 0
 
 	#print state_matrix
-
+	
 	#Normalise the matrix
 	normalised_state_matrix = normalise(state_matrix)
 
-	time_series = time()	
+
+
+	
+
+	""" 
 	
 	#Churn out the top regulators from each gene
 	regulators = create_model(normalised_state_matrix,transcription_factors,time_series)
@@ -319,12 +406,14 @@ def main():
 	plt.plot(np.array(fprs),np.array(recalls))
 	plt.show()
 
-    #AUPR Curve
+	#AUPR Curve
 	plt.plot(np.array(recalls),np.array(precisions))
 	plt.show()
 
 	
+	"""
 
+	return
 
 
 
