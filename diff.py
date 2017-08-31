@@ -108,10 +108,10 @@ def create_model(state_matrix,transcription_factors,time_series):
 		""" Feature Selection using Random Forests / Extra Trees """
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
-		forest_regressor = RandomForestRegressor(n_estimators = 700,criterion = 'mse')
+		#forest_regressor = RandomForestRegressor(n_estimators = 700,criterion = 'mse')
 		#forest_regressor = ExtraTreesRegressor(n_estimators = 1000 ,criterion = 'mse')   #Extra Trees - Randomized Splits
 
-		#forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.075,n_estimators=1600) #Gradient Boosting with Friedman MSE
+		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.08,n_estimators=1300) #Gradient Boosting with Friedman MSE
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -331,9 +331,17 @@ def binning(state_matrix, times, k): #Time Passed is sorted
 	
 	new_state_matrix = np.array(new_state_matrix)
 
-	return new_state_matrix
+	""" Create a new time matrix """
 
-	
+	new_time_matrix = []
+
+	for bin in bins:
+		new_time_matrix.append(times[bin[0]])
+
+
+	return new_state_matrix, new_time_matrix
+
+
 
 
 def main():
@@ -348,7 +356,7 @@ def main():
 
 	time_series = time()	
 
-	binning(state_matrix,time_series,300)
+	state_matrix, time_series = binning(state_matrix,time_series,270)
 
 	#Impute in the matrix
 	#state_matrix = impute(state_matrix)
@@ -362,13 +370,9 @@ def main():
 	#print state_matrix
 	
 	#Normalise the matrix
-	normalised_state_matrix = normalise(state_matrix)
-
-
+	normalised_state_matrix = normalise(state_matrix)	
 
 	
-
-	""" 
 	
 	#Churn out the top regulators from each gene
 	regulators = create_model(normalised_state_matrix,transcription_factors,time_series)
@@ -410,8 +414,10 @@ def main():
 	plt.plot(np.array(recalls),np.array(precisions))
 	plt.show()
 
+
+
 	
-	"""
+
 
 	return
 
