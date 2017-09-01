@@ -12,7 +12,7 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 
 """ Algorithm : 
-				1. Cluster Cells by using an ensemble of methods 
+				1. Cluster Cells by using an ensemble of Clustering Algorithms for variable number of clusters 
 				2. For each method compute the averaging instance to replace the dropout point
 				3. Average out all the dropout point results from different clusterings to generate a singular dropout score
 
@@ -38,6 +38,47 @@ def create_data_matrix():
 	return data_matrix_array
 
 
+#Function to replace dropouts in the same cluster
+def replace_dropouts(clusters):
+	#Replaced Data Matrix
+	replaced_matrix = []
+	total = 0
+    
+	for cluster in clusters:
+		#Temporary Matrix
+		temp_cluster = clusters[cluster]
+
+		temp = []
+		
+		#Replace the dropouts with the average expression values for each gene
+		for gene in temp_cluster:
+			#Indexes which have to be replaced
+			indexes = np.where(gene == 0)
+
+			#Mean 
+			mean = np.mean(gene)
+            
+            #Replace Values
+			gene[:][indexes] = mean
+
+			temp.append(gene.tolist())
+
+			#print temp
+
+		temp = np.array(temp)
+		temp = temp.transpose()
+
+		replaced_matrix += temp.tolist()
+
+
+	replaced_matrix = np.array(replaced_matrix)
+
+
+	return replaced_matrix
+
+
+
+#Function to perform imputation
 def perform_imputation(data_matrix):
 	#Cast into float
 	data_matrix = data_matrix.astype(float)
@@ -72,18 +113,23 @@ def perform_imputation(data_matrix):
 	#Create Clusters
 	clusters = {}
 
+	#Get unique values
+	unique_value = np.unique(labels)
 	
+	
+	for cluster in unique_value:
+		#Get indexes
+		indexes = np.where(labels==cluster)
 
-
-
+		clusters[cluster] = data_matrix[:][indexes[0]].transpose()
 
 	
+	#Replace Dropouts
+	new_matrix = replace_dropouts(clusters)
 
 
-
-
-
-	return
+	return new_matrix
+	
 
 def main():
 	data_matrix = create_data_matrix()
