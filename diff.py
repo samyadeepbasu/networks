@@ -109,9 +109,9 @@ def create_model(state_matrix,transcription_factors,time_series):
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
 		#forest_regressor = RandomForestRegressor(n_estimators = 700,criterion = 'mse')
-		#forest_regressor = ExtraTreesRegressor(n_estimators = 1000 ,criterion = 'mse')   #Extra Trees - Randomized Splits
+		forest_regressor = ExtraTreesRegressor(n_estimators = 700 ,criterion = 'mse')   #Extra Trees - Randomized Splits
 
-		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.07,n_estimators=1800) #Gradient Boosting with Friedman MSE
+		#forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.07,n_estimators=1800) #Gradient Boosting with Friedman MSE
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -356,7 +356,7 @@ def main():
 
 	time_series = time()	
 
-	state_matrix, time_series = binning(state_matrix,time_series,340)
+	#state_matrix, time_series = binning(state_matrix,time_series,340)
 
 	#Impute in the matrix
 	#state_matrix = impute(state_matrix)
