@@ -10,6 +10,7 @@ from numpy import inf
 from scipy.stats import pearsonr
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
+from sklearn.manifold import TSNE, SpectralEmbedding, Isomap
 
 """ Algorithm : 
 				1. Cluster Cells by using an ensemble of Clustering Algorithms for variable number of clusters 
@@ -43,7 +44,7 @@ def replace_dropouts(clusters):
 	#Replaced Data Matrix
 	replaced_matrix = []
 	total = 0
-    
+	
 	for cluster in clusters:
 		#Temporary Matrix
 		temp_cluster = clusters[cluster]
@@ -57,8 +58,8 @@ def replace_dropouts(clusters):
 
 			#Mean 
 			mean = np.mean(gene)
-            
-            #Replace Values
+			
+			#Replace Values
 			gene[:][indexes] = mean
 
 			temp.append(gene.tolist())
@@ -128,17 +129,77 @@ def perform_imputation(data_matrix):
 	new_matrix = replace_dropouts(clusters)
 
 
-	return new_matrix
+	return new_matrix, reduced_data,labels
 	
 
+#Normalise the expression levels in the cell -- Convert into Normal Distribution
+def normalise(matrix):
+	mew = np.mean(matrix,axis=1)
+
+	std = np.std(matrix,axis=1)
+
+	for i in range(0,len(matrix)):
+		matrix[i] = (matrix[i] - mew[i]) / std[i]
+
+
+	return matrix
+
+
+#Function to visualise the progression of cells
+def visualise(imputed_matrix):
+	#Tranpose to get the correct ordering
+	imputed_matrix = imputed_matrix.transpose()
+
+	#Normalise before clustering
+	normalised_matrix = normalise(imputed_matrix)
+
+	#print normalised_matrix[0]
+
+	#Visualise 
+	reduced_matrix = SpectralEmbedding(n_components=2).fit_transform(normalised_matrix)
+
+	X = reduced_matrix[:,0]
+	Y = reduced_matrix[:,1]
+
+	plt.figure("Progression after imputation")
+
+	plt.scatter(X,Y)
+	plt.show()	
+
+	return
+
+
+#Main Function
 def main():
 	data_matrix = create_data_matrix()
 
 	#Transpose the data matrix
 	data_matrix = data_matrix.transpose()
+    
+    #Convert from string to float
+	data_matrix = data_matrix.astype(float)
+
+	#Normalise
+	data_matrix = normalise(data_matrix)
+
 
 	#Perform imputation onto the matrix
-	imputed_matrix = perform_imputation(data_matrix)
+	imputed_matrix ,reduced_data, labels = perform_imputation(data_matrix)
+
+	#Transpose and print to File
+	imputed_matrix = imputed_matrix.transpose()
+
+	visualise(imputed_matrix)
+
+	
+
+
+
+
+
+
+
+	
 
 
 
