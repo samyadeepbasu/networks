@@ -134,8 +134,6 @@ def perform_imputation(data_matrix):
 
 		clusters[cluster] = data_matrix[:][indexes[0]].transpose()
 
-		#print data_matrix[:][indexes[0]].transpose().shape
-
 	
 	#Replace Dropouts
 	new_matrix = replace_dropouts(clusters)
@@ -161,14 +159,6 @@ def normalise(matrix):
 #Function to visualise the progression of cells
 def visualise(imputed_matrix,labels):
 	#Normalise before clustering
-	#normalised_matrix = normalise(imputed_matrix)
-	#normalised_matrix = imputed_matrix
-
-	#Visualise
-	#reduced_matrix = SpectralEmbedding(n_components=2).fit_transform(normalised_matrix)
-	
-	#Visualise 
-	#reduced_matrix = KernelPCA(n_components=2).fit_transform(normalised_matrix)
 	reduced_matrix = imputed_matrix
 	X = reduced_matrix[:,0]
 	Y = reduced_matrix[:,1]
@@ -182,10 +172,13 @@ def visualise(imputed_matrix,labels):
 
 #Function to print the imputed matrix to file 
 def print_to_file(imputed_matrix):
-	total = 0
-	
-	#print imputed_matrix[0]
+	#Manipulate the matrix to add an extra column
+	imputed_matrix = np.c_[np.ones(len(imputed_matrix)),imputed_matrix]
 
+	#File Stream
+	f = open('data_new.txt','w')
+
+	np.savetxt(f,imputed_matrix,delimiter='\t',newline='\n')
 	return
 
 #Main Function
@@ -216,18 +209,6 @@ def main():
 
 	
 	
-
-
-
-
-
-
-
-
-
-	
-
-
 
 
 
