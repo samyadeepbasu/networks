@@ -23,13 +23,13 @@ from numpy import inf
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data3/tf.txt","r")
+	tf_file = open("data2/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data3/data.txt","r")
+	exp_file = open("data2/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -100,14 +100,15 @@ def similarity(data_matrix):
 def perform_imputation(data_matrix):
 	#Cast into float
 	data_matrix = data_matrix.astype(float)
-
-	similarity_matrix = similarity(data_matrix)	
+    
+    #Construct Similarity Matrix for the Cells
+	similarity_matrix = similarity(data_matrix)		
 
 	#Number of components ~ 5% of the total cells
 	components = int(0.05 * len(similarity_matrix))
 
-	#Reduce Dimensions
-	d = KernelPCA(n_components=2)#components)
+	#Reduce Dimensions -- Non-linear dimensionality reduction
+	d = SpectralEmbedding(n_components=components)
 
 	reduced_data = d.fit_transform(similarity_matrix)
 	
@@ -115,7 +116,7 @@ def perform_imputation(data_matrix):
 	k_end = 15
 
 	#Cluster using K-means -- This has to be put inside a loop
-	clusterer = KMeans(n_clusters = 3,init='k-means++')
+	clusterer = KMeans(n_clusters = k_start,init='k-means++')
 
 	labels = clusterer.fit_predict(reduced_data)
 
@@ -143,14 +144,10 @@ def perform_imputation(data_matrix):
 	
 	
 
-#Normalise the expression levels in the cell -- Convert into Normal Distribution
+#Normalise the expression levels in the cell  - B/w 0 to 1
 def normalise(matrix):
-	mew = np.mean(matrix,axis=1)
-
-	std = np.std(matrix,axis=1)
-
 	for i in range(0,len(matrix)):
-		matrix[i] = (matrix[i] - mew[i]) / std[i]
+		matrix[i] = matrix[i] / max(matrix[i])
 
 
 	return matrix
@@ -158,8 +155,9 @@ def normalise(matrix):
 
 #Function to visualise the progression of cells
 def visualise(imputed_matrix,labels):
-	#Normalise before clustering
-	reduced_matrix = imputed_matrix
+	
+	reduced_matrix = PCA(n_components=2).fit_transform(imputed_matrix)
+
 	X = reduced_matrix[:,0]
 	Y = reduced_matrix[:,1]
 
@@ -176,7 +174,7 @@ def print_to_file(imputed_matrix):
 	imputed_matrix = np.c_[np.ones(len(imputed_matrix)),imputed_matrix]
 
 	#File Stream
-	f = open('data_new.txt','w')
+	f = open('data2_new.txt','w')
 
 	np.savetxt(f,imputed_matrix,delimiter='\t',newline='\n')
 	return
@@ -190,13 +188,9 @@ def main():
 	
 	#Convert from string to float
 	data_matrix = data_matrix.astype(float)
-
-	#data_matrix = np.log(data_matrix)
-
-	#data_matrix[data_matrix == -inf] = 0
 	
-	#Normalise
-	#data_matrix = normalise(data_matrix)
+	#Normalise b/w 0 to 1  --> Important for clustering algorithms
+	data_matrix = normalise(data_matrix)	
 
 	#Perform imputation onto the matrix
 	imputed_matrix ,reduced_data, labels = perform_imputation(data_matrix)
@@ -205,7 +199,7 @@ def main():
 	imputed_matrix = imputed_matrix.transpose()
 
 	#Print the Imputed Matrix into a data file for Pseudo Time Measurement
-	print_to_file(imputed_matrix)
+	print_to_file(imputed_matrix) 
 
 	
 	
