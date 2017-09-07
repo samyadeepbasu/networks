@@ -17,6 +17,7 @@ import networkx as nx
 from noise_reduction import clustered_state
 from sklearn.linear_model import Lars
 from numpy import inf
+from order import order_time
 
 
 #Function to Clean the data and create a training set
@@ -47,6 +48,8 @@ def pseudo_time(data_matrix):
 	#Extraction of Pseudo Time from the List
 	ordered_cells = [line.split()[1] for line in time_file.readlines()]
 
+	#ordered_cells = order_time() #Using Imputation Algorithm and TSCAN
+
 	#Convert into Numpy Array
 	ordered_cells = np.array(ordered_cells)
 
@@ -72,10 +75,15 @@ def time():
 
 	times = [line.split()[1] for line in time_series.readlines()]
 
+	#times = order_time()  #Using Imputation Algorithm and TSCAN
+
 	sorted_time = np.sort(np.array(times).astype(float))
 
 	#Normalise
-	normalised_time = (sorted_time - np.min(sorted_time)) / (np.max(sorted_time) - np.min(sorted_time))
+	#normalised_time = (sorted_time - np.min(sorted_time)) / (np.max(sorted_time) - np.min(sorted_time))
+	normalised_time = sorted_time / max(sorted_time)
+	print normalised_time
+
 
 	return normalised_time
 
@@ -105,13 +113,13 @@ def create_model(state_matrix,transcription_factors,time_series):
 		#Remove the corresponding column from the training set
 		[expression.remove(expression[i]) for expression in X]
 
-		""" Feature Selection using Random Forests / Extra Trees """
+		""" Feature Selection using Random Forests / Extra Trees / Gradient Boosting Regressor """
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
-		#forest_regressor = RandomForestRegressor(n_estimators = 700,criterion = 'mse')
-		forest_regressor = ExtraTreesRegressor(n_estimators = 700 ,criterion = 'mse')   #Extra Trees - Randomized Splits
+		#forest_regressor = RandomForestRegressor(n_estimators = 1000,criterion = 'mse')
+		#forest_regressor = ExtraTreesRegressor(n_estimators = 700 ,criterion = 'mse')   #Extra Trees - Randomized Splits
 
-		#forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.07,n_estimators=1800) #Gradient Boosting with Friedman MSE
+		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.09,n_estimators=1200, max_depth=3, max_features='sqrt') #Gradient Boosting with least square
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -216,25 +224,48 @@ def ground_truth():
 
 	#Conversion of the interactions in appropriate format  -- Target,Regulator
 	interactions = [ (int(line.split()[2]),int(line.split()[3])) for line in g_file.readlines()]
+
+	for item in interactions:
+		if item[0] == item[1]:
+			interactions.remove(item)
 	
 	return interactions
 
 
 #Function to generate the AUPR Graph and Score / AUC Graph and Score
-def get_graph(edges,ground_truth):
+def get_graph(edges,ground_truth,actual_tf):
+
+	temp = []
+	#print actual_tf
+	#print len(temp)
+	for i in range(0,len(edges)):
+		if edges[i][0] in actual_tf and edges[i][1] in actual_tf:
+			temp.append(edges[i])
+
+
+
 	
 	common = 0
-
+	
+	#Replace edges with temp
 	for e in ground_truth:
-		for edge in edges:
+		for edge in temp:
 			if e[0] == edge[0] and e[1]==edge[1]:
 				common += 1
 
-	#
 	
-	precision = float(common) / len(edges)
+
+	if len(temp) == 0 :
+		return 0,0,0
+	
+	precision = float(common) / len(temp)
 	recall = float(common) / len(ground_truth)
-	fpr = (float(len(edges)) - float(common)) / float(9900 - len(ground_truth))
+	fpr = (float(len(temp)) - float(common)) / float(len(actual_tf)*(len(actual_tf)-1) - len(ground_truth))
+
+	if fpr>1:
+		print len(temp)
+		print common
+		print "-#-"
 
 	return precision,recall,fpr
 	
@@ -248,33 +279,35 @@ def normalise(state_matrix):
 	#Normalise along the columns
 	temp_matrix = state_matrix.transpose()
 
-	matrix = np.array([ (item - np.min(item))/(np.max(item) - np.min(item)) for item in temp_matrix])
+	#matrix = np.array([ (item - np.min(item))/(np.max(item) - np.min(item)) for item in temp_matrix])
 
-	matrix = matrix.transpose()
+	for i in range(len(temp_matrix)):
+		temp_matrix[i] = temp_matrix[i] / max(temp_matrix[i])
+
+	matrix = temp_matrix.transpose()
+
 
 	return matrix
+
+#Normalise the gene expression to normal distribution
+def normal(data_matrix):
+	temp_matrix = data_matrix.transpose()
+	#print len(temp_matrix)
+	for i in range(0,len(temp_matrix)):
+		#Mean
+		mean = np.mean(temp_matrix[i])
+		std = np.std(temp_matrix[i])
+		temp_matrix[i] = (temp_matrix[i] - mean) / std
+
+	temp_matrix = temp_matrix.transpose()
+	
+	return temp_matrix
+
 
 #Area under Curve
 def area(fpr,recall):
 
 	return metrics.auc(fpr,recall)
-
-
-#Input Dropouts with average expression in the cell
-def impute(matrix):	
-	mean = []
-	count = 0
-	for i in range(0,len(matrix)):
-		#Get the average of the expressions
-		mean_expression = np.mean(matrix[i])
-
-		#Replace zeros with average expression values
-		matrix[i][matrix[i] == 0] = mean_expression
-
-		count += np.count_nonzero(matrix[i] == 0)
-
-
-	return matrix
 
 
 """ Binning for creating clusters """
@@ -342,11 +375,27 @@ def binning(state_matrix, times, k): #Time Passed is sorted
 	return new_state_matrix, new_time_matrix
 
 
+def find_tf(tfs):
+	real_interactions = ground_truth()
+	
+	temp = []
+	for interaction in real_interactions:
+		temp.append(interaction[0])
+		temp.append(interaction[1])
+		
+		
+	
+	#Unique Transcription Factors
+	temp = list(set(temp))
+   
+	return temp
 
 
 def main():
 	#Transcription Factors and Data Matrix
 	transcription_factors, data_matrix = create_data_matrix()
+
+	#data_matrix = np.delete(data_matrix,0,axis=1) #Removal of first column -- Irrelevant
 
 	#Order the cells using Pseudo Time
 	ordered_matrix = pseudo_time(data_matrix)
@@ -356,23 +405,23 @@ def main():
 
 	time_series = time()	
 
-	#state_matrix, time_series = binning(state_matrix,time_series,340)
+	tf_no_edges = find_tf(transcription_factors)	
+	print len(tf_no_edges)
+
+	
+	state_matrix, time_series = binning(state_matrix,time_series,90)
 
 	#Impute in the matrix
 	#state_matrix = impute(state_matrix)
 	
 	#Conversion into log
-	state_matrix = np.log(state_matrix)
+	#state_matrix = np.log(state_matrix)
 
 	#Replace -infinity values with zero    
-	state_matrix[state_matrix == -inf] = 0
-
-	#print state_matrix
+	#state_matrix[state_matrix == -inf] = 0
 	
 	#Normalise the matrix
-	normalised_state_matrix = normalise(state_matrix)	
-
-	
+	normalised_state_matrix =  state_matrix #normal(state_matrix)#normalise(state_matrix)		
 	
 	#Churn out the top regulators from each gene
 	regulators = create_model(normalised_state_matrix,transcription_factors,time_series)
@@ -386,14 +435,17 @@ def main():
 
 	i = start
 
-	while i <=9890:
+	while i <=9890: #9900
 		threshold = get_threshold(regulators,i)
 
 		edges = top_regulators(regulators,threshold,transcription_factors)
 
 		real_interactions = ground_truth()
 
-		precision,recall,fpr = get_graph(edges,real_interactions)
+		precision,recall,fpr = get_graph(edges,real_interactions,tf_no_edges)
+
+		if precision == recall == fpr == 0 :
+			break
 
 		precisions.append(precision)
 		recalls.append(recall)
@@ -401,10 +453,20 @@ def main():
 		print i 
 		i += 8
 
-	print area(np.array(fprs),np.array(recalls))
 
-	print area(np.array(recalls),np.array(precisions))
 	
+
+
+	
+	
+
+	a = area(np.array(fprs),np.array(recalls))
+
+	b = area(np.array(recalls),np.array(precisions))
+	
+	print a 
+	print b
+
 	#AUROC Curve
 	#plt.figure(1)
 	plt.plot(np.array(fprs),np.array(recalls))
@@ -414,17 +476,38 @@ def main():
 	plt.plot(np.array(recalls),np.array(precisions))
 	plt.show()
 
-
-
 	
-
-
-	return
 
 
 
 	
 
 
+	return a,b
 
+	
+def get_total():
+	AUC = []
+	AUPR = []
+	for i in range(20):
+		auc, aupr = main()
+
+		AUC.append(auc)
+		AUPR.append(aupr)
+
+
+	print np.mean(np.array(auc))
+	print np.mean(np.array(aupr))
+	
+
+
+
+
+
+
+	
+
+
+
+#get_total()
 main()
