@@ -116,10 +116,11 @@ def create_model(state_matrix,transcription_factors,time_series):
 		""" Feature Selection using Random Forests / Extra Trees / Gradient Boosting Regressor """
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
+		#forest_regressor = DecisionTreeRegressor(random_state = 0)
 		#forest_regressor = RandomForestRegressor(n_estimators = 1000,criterion = 'mse')
 		#forest_regressor = ExtraTreesRegressor(n_estimators = 700 ,criterion = 'mse')   #Extra Trees - Randomized Splits
 
-		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.09,n_estimators=1200, max_depth=3, max_features='sqrt') #Gradient Boosting with least square
+		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.09,n_estimators=1200,subsample=0.87) #Gradient Boosting with least square
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -409,7 +410,7 @@ def main():
 	print len(tf_no_edges)
 
 	
-	state_matrix, time_series = binning(state_matrix,time_series,90)
+	state_matrix, time_series = binning(state_matrix,time_series,85)
 
 	#Impute in the matrix
 	#state_matrix = impute(state_matrix)
@@ -454,11 +455,6 @@ def main():
 		i += 8
 
 
-	
-
-
-	
-	
 
 	a = area(np.array(fprs),np.array(recalls))
 
@@ -478,26 +474,21 @@ def main():
 
 	
 
-
-
-	
-
-
 	return a,b
 
 	
 def get_total():
 	AUC = []
 	AUPR = []
-	for i in range(20):
+	for i in range(2):
 		auc, aupr = main()
 
 		AUC.append(auc)
 		AUPR.append(aupr)
 
 
-	print np.mean(np.array(auc))
-	print np.mean(np.array(aupr))
+	print AUC
+	print AUPR
 	
 
 
