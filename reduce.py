@@ -1,4 +1,4 @@
-""" Reducing Dimensions -> 100 Genes X 373 Cells """
+"""  Reducing Dimensions -> 100 Genes X 373 Cells """
 
 
 import numpy as np 
@@ -45,8 +45,19 @@ def visualise(data_matrix):
 def gaussian(data_matrix):
 	for i in range(len(data_matrix)):
 		data_matrix[i] = (data_matrix[i] - np.mean(data_matrix)) / np.std(data_matrix)
+		#data_matrix[i] = (data_matrix[i] - max(data_matrix[i])) / (max(data_matrix[i]) - min(data_matrix[i]))
 
 	return data_matrix
+
+
+#Calculate KullBack Leibler Divergence => Parameters : p_hat (Predicted value), p(Ideal Value) 
+def KL_divergence(p_hat,p):
+	#Summation of all the activations of the training examples in the batch
+	#p_hat = tf.reduce_mean(p_hat,axis=0)
+
+	KL_penalty = tf.reduce_mean(p*tf.log(p) - p*tf.log(p_hat) + (1-p)*tf.log(1-p) - (1-p)*tf.log(1-p_hat))
+
+	return KL_penalty
 
 
 #Function to train an autoencoder and generate a latent representation of the cells
@@ -56,6 +67,8 @@ def train(data_matrix,k):
 
 	#Output data
 	output_data = input_data
+
+	input_data = input_data + 0.2 * np.random.random_sample((input_data.shape))
 
 	#Number of Neurons in the Hidden Unit
 	n_hidden = k 
@@ -77,21 +90,30 @@ def train(data_matrix,k):
 
 	#Hidden Layer Output  => (None X 20)
 	h = tf.nn.tanh(tf.matmul(X,W_hidden) + b_hidden)
-    
-    #Output Layer Weights
+	
+	#Output Layer Weights
 	W_output = tf.transpose(W_hidden)
 
 	#Output Layer Bias
 	b_output = tf.Variable(tf.zeros([n_features]))
-    
-    #Final Layer Output
+	
+	#Final Layer Output
 	prediction = tf.nn.tanh(tf.matmul(h,W_output) + b_output)
 
-	#Calculation of Loss - Add a loss function and compute the mean of the loss
-	loss = tf.reduce_mean(tf.square(tf.subtract(prediction,input_data)))
+	#Actual Data
+	Y = tf.placeholder(tf.float32,[None,n_features])
+
+	#Compute the sparsity
+	sparsity = np.repeat([0.05], n_hidden).astype(np.float32)
+	
+	#Adding L2 penalty
+	regularizers = tf.nn.l2_loss(W_hidden) + tf.nn.l2_loss(W_output)
+
+	#Calculation of Loss - Add a loss function and compute the mean of the loss along with L2 regularization
+	loss =  0.5 * tf.reduce_mean(tf.pow(tf.subtract(prediction,Y),2))  + 0.01*regularizers
 
 	#Training using Gradient Descent
-	training = tf.train.GradientDescentOptimizer(0.05).minimize(loss)
+	training = tf.train.AdamOptimizer(0.001).minimize(loss)
 
 	#Initialisation Step
 	init = tf.initialize_all_variables()
@@ -100,8 +122,11 @@ def train(data_matrix,k):
 		#Initialise Session Variables
 		sess.run(init)
 
+		Y_plt = []
+		X_plt = []
+
 		#Number of Rounds of Training
-		n_rounds = 20000
+		n_rounds = 10000
 
 		#Batch size -> Max Batch Size : 373
 		batch_size = 200
@@ -111,24 +136,33 @@ def train(data_matrix,k):
 			batch_indexes = np.random.randint(n_samples,size=batch_size)
 
 			#Input Data
-			input_data = input_data[batch_indexes][:]
+			input_x = input_data[batch_indexes][:]
 
 			#Output 
-			output_data = output_data[batch_indexes][:]
+			output_x = output_data[batch_indexes][:]
 
-			 
-
-
-
+			#Train the model
+			sess.run(training,feed_dict={X:input_x,Y:output_x})
 
 
+			if i%50 == 0:
+				Y_plt.append(sess.run(loss,feed_dict= {X:input_x,Y:output_x}))
+				print sess.run(loss,feed_dict= {X:input_x,Y:output_x})
+				
+				X_plt.append(i)
+
+		weights = sess.run(W_hidden)
+		biases = sess.run(b_hidden)
 
 
 
+	#plt.figure("Loss Plot")
+	plt.plot(np.array(X_plt),np.array(Y_plt))
+	plt.show()
 
 
+	return weights, biases 
 
-	return
 
 
 def main():
@@ -143,9 +177,20 @@ def main():
 
 	#Convert into Normal Distribution
 	data_matrix = gaussian(data_matrix)
-    
-    #Get a latent representation of data
-	train(data_matrix,20)
+	
+	#Get a latent representation of data -> Parameters : Number of Hidden Units
+	weights, biases = train(data_matrix,50)
+
+	reduced_matrix = np.matmul(data_matrix,weights) + biases
+	
+	visualise(data_matrix)
+	visualise(reduced_matrix)
+
+
+
+
+
+
 
 
 
