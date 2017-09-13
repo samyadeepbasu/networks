@@ -183,18 +183,11 @@ def main():
 
 	reduced_matrix = np.matmul(data_matrix,weights) + biases
 	
+	temp_matrix = PCA(n_components=50).fit_transform(data_matrix)
+
 	visualise(data_matrix)
 	visualise(reduced_matrix)
-
-
-
-
-
-
-
-
-
-
+	visualise(temp_matrix)
 
 
 	return
