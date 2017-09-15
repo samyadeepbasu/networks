@@ -9,6 +9,7 @@ import math
 import tensorflow as tf
 from sklearn.decomposition import PCA, KernelPCA, FastICA
 from sklearn.manifold import Isomap, SpectralEmbedding,TSNE
+from sklearn.cluster import KMeans, AgglomerativeClustering
 import networkx as nx
 
 #Function to Clean the data and create a training set
@@ -120,10 +121,10 @@ def train(data_matrix,k):
 	regularizers = tf.nn.l2_loss(W_hidden) + tf.nn.l2_loss(W_output) + tf.nn.l2_loss(b_hidden) + tf.nn.l2_loss(b_output)
 
 	#Calculation of Loss - Add a loss function and compute the mean of the loss along with L2 regularization
-	loss =  0.5 * tf.reduce_mean(tf.pow(tf.subtract(prediction,Y),2))  + 0.01 * regularizers
+	loss =  0.5 * tf.reduce_mean(tf.pow(tf.subtract(prediction,Y),2))  + 0.03 * regularizers
 
 	#Training using Gradient Descent
-	training = tf.train.AdamOptimizer(0.0004).minimize(loss)
+	training = tf.train.AdamOptimizer(0.001).minimize(loss)
 
 	#Initialisation Step
 	init = tf.initialize_all_variables()
@@ -139,7 +140,7 @@ def train(data_matrix,k):
 		n_rounds = 20000
 
 		#Batch size -> Max Batch Size : 373
-		batch_size = 200
+		batch_size = 300
 
 		for i in range(n_rounds):
 			#Generate an array of random numbers from pool of 0 to n_samples
@@ -252,7 +253,7 @@ def cluster_centres(reduce_dim,times):
 	plt.show()
 
 
-	return
+	return line_segments
 
 
 #Function to obtain the actual time
@@ -264,6 +265,14 @@ def actual_cell_time():
 
 	return np.array(times).astype(float)
 
+
+#Function to get the projections
+def get_projections(reduced_dim,line_segments):
+	print len(reduced_dim)
+	print len(line_segments)
+
+
+	return
 
 
 def main():
@@ -278,10 +287,10 @@ def main():
 	#visualise(data_matrix)
 	
 	#Convert into Normal Distribution
-	data_matrix = gaussian(data_matrix)
+	#data_matrix = gaussian(data_matrix)
 
 	#Get a latent representation of data -> Parameters : Number of Hidden Units
-	#weights, biases = train(data_matrix,80)
+	#weights, biases = train(data_matrix,300)
 
 	#reduced_matrix = np.matmul(data_matrix,weights) + biases
 	
@@ -292,10 +301,31 @@ def main():
 
 	#visualise(old_matrix,times)
 	reduce_dim = visualise(old_matrix,times)
-	#reduce_dim = visualise(reduced_matrix,times) 
+	#reduce_dim = visualise(reduced_matrix,times)
+
+	#temp_deep = gaussian(reduce_dim) 
+
+	#weights, biases = train(temp_deep,2)
+
+	#reduced_matrix = np.matmul(temp_deep,weights) + biases
+
+
 	
-	cluster_centres(reduce_dim,times)
+	lines = cluster_centres(reduce_dim,times)
 	#print actual_cell_time()
+
+	#projection_points = get_projections(reduce_dim,lines)
+	
+	""" 
+	index_0 = np.where(times==22)
+	cells_0 = reduce_dim[index_0][:]
+	k_mean = AgglomerativeClustering(n_clusters=4).fit_predict(cells_0)
+	#print k_mean
+	lines = cluster_centres(cells_0,k_mean)
+
+	#plt.scatter(cells_0[:,0],cells_0[:,1],c=k_mean)
+	#plt.show()
+	"""
 
 
 	return 
