@@ -11,6 +11,7 @@ from sklearn.decomposition import PCA, KernelPCA, FastICA
 from sklearn.manifold import Isomap, SpectralEmbedding,TSNE
 from sklearn.cluster import KMeans, AgglomerativeClustering
 import networkx as nx
+from shapely.geometry import LineString, Point
 
 #Function to Clean the data and create a training set
 def create_data_matrix():
@@ -118,10 +119,10 @@ def train(data_matrix,k):
 	sparsity = np.repeat([0.05], n_hidden).astype(np.float32)
 	
 	#Adding L2 penalty
-	regularizers = tf.nn.l2_loss(W_hidden) + tf.nn.l2_loss(W_output) + tf.nn.l2_loss(b_hidden) + tf.nn.l2_loss(b_output)
+	regularizers = tf.nn.l2_loss(W_hidden) + tf.nn.l2_loss(W_output)# + tf.nn.l2_loss(b_hidden) + tf.nn.l2_loss(b_output)
 
 	#Calculation of Loss - Add a loss function and compute the mean of the loss along with L2 regularization
-	loss =  0.5 * tf.reduce_mean(tf.pow(tf.subtract(prediction,Y),2))  + 0.03 * regularizers
+	loss =  0.5 * tf.reduce_mean(tf.pow(tf.subtract(prediction,Y),2))  + 0.01 * regularizers
 
 	#Training using Gradient Descent
 	training = tf.train.AdamOptimizer(0.001).minimize(loss)
@@ -137,7 +138,7 @@ def train(data_matrix,k):
 		X_plt = []
 
 		#Number of Rounds of Training
-		n_rounds = 20000
+		n_rounds = 5000
 
 		#Batch size -> Max Batch Size : 373
 		batch_size = 300
@@ -253,7 +254,7 @@ def cluster_centres(reduce_dim,times):
 	plt.show()
 
 
-	return line_segments
+	return line_segments,cluster_centres,unique_labels
 
 
 #Function to obtain the actual time
@@ -263,16 +264,90 @@ def actual_cell_time():
 
 	times = [line.split()[2] for line in f.readlines()]
 
+	f.close()
+
 	return np.array(times).astype(float)
 
 
 #Function to get the projections
-def get_projections(reduced_dim,line_segments):
-	print len(reduced_dim)
-	print len(line_segments)
+def get_projections(lines,cluster_centre,unique_labels,times,matrix):
+	""" Algorithm : 
+			   For each point -> find lines originating from cluster centres, project on the line where the distance is shortest """
+
+	projections = []
+
+	for i in range(len(matrix)):
+		#print matrix[i]
+		#print times[i]
+		index = np.where(unique_labels == times[i])[0]
+
+		#Cluster Centre for the current point
+		centre = (cluster_centre[index[0]][0],cluster_centre[index[0]][1])
+
+		#Extract all the lines originating from the cluster centre
+		temp_lines = []
+
+
+		for line in lines:
+			if centre in line:
+				temp_lines.append(line)
+
+		distances = []
+
+		for line in temp_lines:
+			#Get the line from the cluster centre
+			l = LineString(line)
+
+			#Define Point
+			q = Point(matrix[i][0],matrix[i][1])
+
+			distances.append(q.distance(l))
+
+
+		#Obtain the Minimum Distance and the line corresponding to it --> Then project the point onto the line
+		min_distance_index = distances.index(min(distances))
+
+		#Line on which the projection has to take place
+		projection_line = temp_lines[min_distance_index]
+
+		p_l = LineString(projection_line)
+
+		ns = p_l.interpolate(p_l.project(Point(matrix[i][0],matrix[i][1])))
+
+		projections.append(np.array(ns))		
+
+
+	#for i in range(len(projections)):
+	#	projections[i] = projections[i][0]
+
+
+	projections = np.array(projections)
+
+	X = projections[:,0]
+	Y = projections[:,1]
+
+	plt.scatter(X,Y,c=times, s=130,alpha=0.4)
+	plt.show()
 
 
 	return
+
+
+def monocle_time():
+	f = open('data2/time.txt','r')
+
+	times = [[line.split()[1],line.split()[2]] for line in f.readlines() ]
+
+	times = np.array(times).astype(float)
+	X = times[:,0]
+	color = times[:,1]
+	
+	Y = np.repeat(2,len(X))
+	plt.scatter(X,Y,c=color,s=140,alpha=0.3)
+	plt.show()
+
+	return 
+
 
 
 def main():
@@ -290,13 +365,13 @@ def main():
 	#data_matrix = gaussian(data_matrix)
 
 	#Get a latent representation of data -> Parameters : Number of Hidden Units
-	#weights, biases = train(data_matrix,300)
+	#weights, biases = train(data_matrix,200)
 
 	#reduced_matrix = np.matmul(data_matrix,weights) + biases
 	
 	#temp_matrix = PCA(n_components=5).fit_transform(old_matrix)
 	
-	times = actual_cell_time()
+	times = actual_cell_time()	
 
 
 	#visualise(old_matrix,times)
@@ -311,8 +386,17 @@ def main():
 
 
 	
-	lines = cluster_centres(reduce_dim,times)
+	lines, cluster_centre, unique_labels = cluster_centres(reduce_dim,times)
+	
+	#Get Projections for the points on the main line
+	get_projections(lines,cluster_centre,unique_labels,times,reduce_dim)
+
+	monocle_time()
+
+	
+
 	#print actual_cell_time()
+	#monocle_time()
 
 	#projection_points = get_projections(reduce_dim,lines)
 	
