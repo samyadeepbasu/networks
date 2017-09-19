@@ -36,7 +36,7 @@ def create_data_matrix():
 #Visualise the clusters
 def visualise(data_matrix,color):
 	#Reduce Dimensions using PCA
-	pca = FastICA(n_components=2).fit_transform(data_matrix)
+	pca = KernelPCA(n_components=2).fit_transform(data_matrix)
 	X = pca[:,0]
 	Y = pca[:,1]
 	color_map = [0,2,5,20,22]
@@ -317,10 +317,6 @@ def get_projections(lines,cluster_centre,unique_labels,times,matrix):
 		projections.append(np.array(ns))		
 
 
-	#for i in range(len(projections)):
-	#	projections[i] = projections[i][0]
-
-
 	projections = np.array(projections)
 
 	X = projections[:,0]
@@ -328,7 +324,61 @@ def get_projections(lines,cluster_centre,unique_labels,times,matrix):
 
 	plt.scatter(X,Y,c=times, s=130,alpha=0.4)
 	plt.show()
+	#plt.clf()
 
+	""" Projection of branches with the starting point mentioned """
+	
+	#Known Biological Knowledge
+	starting_point = (cluster_centre[0][0],cluster_centre[0][1])
+
+	temp_point = (cluster_centre[1][0],cluster_centre[1][1])
+
+	#Get the line for the starting point
+	for line in lines:
+		if starting_point in line:
+			first_line = line
+
+		if temp_point in line:
+			second_line = line
+
+
+	#Construct Line String
+	l_s = LineString(first_line)
+
+	#Get the Line with has to be projected
+	projection_line = LineString(second_line)
+	
+	new_projections = []
+	old_projections = []
+	
+	i = 0
+	temp = []
+	for point in projections:
+		temp_point = Point((point[0],point[1]))
+	
+		if projection_line.distance(temp_point) < 0.00000000001 :
+			#Project point onto first line 
+			a = np.array(l_s.interpolate(l_s.project(temp_point)))
+			new_projections.append(a)		
+			temp.append(times[i])
+
+
+		else:
+			new_projections.append(point)
+
+		i += 1
+
+	new_projections = np.array(new_projections)
+	old_projections = np.array(old_projections)
+
+	x = new_projections[:,0]
+	y = new_projections[:,1]
+	 
+	#plt.cla()
+	plt.scatter(x,y,c=times, s=130,alpha=0.4)
+	plt.show()
+	
+	#plt.scatter(old_projections[:,0],old_projections[:,1],s=130,alpha=0.4)
 
 	return
 
@@ -365,14 +415,13 @@ def main():
 	#data_matrix = gaussian(data_matrix)
 
 	#Get a latent representation of data -> Parameters : Number of Hidden Units
-	#weights, biases = train(data_matrix,200)
+	#weights, biases = train(data_matrix,500)
 
 	#reduced_matrix = np.matmul(data_matrix,weights) + biases
 	
 	#temp_matrix = PCA(n_components=5).fit_transform(old_matrix)
 	
 	times = actual_cell_time()	
-
 
 	#visualise(old_matrix,times)
 	reduce_dim = visualise(old_matrix,times)
@@ -392,6 +441,7 @@ def main():
 	get_projections(lines,cluster_centre,unique_labels,times,reduce_dim)
 
 	monocle_time()
+
 
 	
 
