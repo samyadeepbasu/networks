@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt 
 from sklearn.decomposition import FactorAnalysis
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans,AgglomerativeClustering
 from sklearn.metrics import silhouette_score, silhouette_samples
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor,ExtraTreesRegressor, GradientBoostingRegressor
@@ -120,7 +120,7 @@ def create_model(state_matrix,transcription_factors,time_series):
 		#forest_regressor = RandomForestRegressor(n_estimators = 1000,criterion = 'mse')
 		#forest_regressor = ExtraTreesRegressor(n_estimators = 700 ,criterion = 'mse')   #Extra Trees - Randomized Splits
 
-		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.09,n_estimators=1200,subsample=0.87) #Gradient Boosting with least square
+		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.09,n_estimators=1200,random_state=42) #Gradient Boosting with least square
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -315,7 +315,7 @@ def area(fpr,recall):
 
 def binning(state_matrix, times, k): #Time Passed is sorted
 	#Cluster the time points
-	cluster = KMeans(n_clusters=k,init='k-means++')
+	cluster = AgglomerativeClustering(n_clusters=k)
 	
 	#Convert into matrix for K-means
 	time_matrix = np.array([[time] for time in times])
@@ -410,7 +410,7 @@ def main():
 	print len(tf_no_edges)
 
 	
-	state_matrix, time_series = binning(state_matrix,time_series,85)
+	state_matrix, time_series = binning(state_matrix,time_series,90)
 
 	#Impute in the matrix
 	#state_matrix = impute(state_matrix)
@@ -423,7 +423,9 @@ def main():
 	
 	#Normalise the matrix
 	normalised_state_matrix =  state_matrix #normal(state_matrix)#normalise(state_matrix)		
+
 	
+		
 	#Churn out the top regulators from each gene
 	regulators = create_model(normalised_state_matrix,transcription_factors,time_series)
 
@@ -451,7 +453,7 @@ def main():
 		precisions.append(precision)
 		recalls.append(recall)
 		fprs.append(fpr)
-		print i 
+		#print i 
 		i += 8
 
 
