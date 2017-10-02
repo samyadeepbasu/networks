@@ -26,7 +26,7 @@ from sklearn.ensemble import RandomForestRegressor,ExtraTreesRegressor, Gradient
 from sklearn import metrics
 import networkx as nx
 from numpy import inf
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, spearmanr
 
 
 #Function to Clean the data and create a training set
@@ -85,10 +85,16 @@ def find_unique_tfs(interactions):
 
 	return temp
 
+
+#Function to calculate the similarity metric
+def find_pearson_similarity(expression,target_expression):
+
+	return pearsonr(expression,target_expression)[0]
+
+
 #Function to create the local model for computations
-def local_model(data_matrix,unique_regulators,interactions):
-	#Parameter for finding similarity with 
-	k = 4 
+def local_model(data_matrix,unique_regulators,interactions,k):
+	#Parameter for finding similarity with neighbourhood target genes	
 
 	unique_tfs = find_unique_tfs(interactions)
 	
@@ -126,7 +132,7 @@ def local_model(data_matrix,unique_regulators,interactions):
 
 				target_expression = data_matrix[target]
 
-				sim_scores = [pearsonr(expression,target_expression)[0] for expression in neighbour_expression]
+				sim_scores = [find_pearson_similarity(expression,target_expression) for expression in neighbour_expression]
 
 				final_weight_list.append([(regulator,target),sum(sim_scores)])
 
@@ -138,10 +144,14 @@ def local_model(data_matrix,unique_regulators,interactions):
 				target_expression = data_matrix[target]
 				
 				#Pearson Correlation
-				sim_scores = np.array([pearsonr(expression,target_expression)[0] for expression in neighbour_expression])
+				sim_scores = np.array([find_pearson_similarity(expression,target_expression) for expression in neighbour_expression])
 
 				#Extract the Indexes of Top few scores
-				ordered_indexes = np.flip(np.argsort(sim_scores),axis=0)
+				ordered_indexes = np.argsort(sim_scores).tolist()
+
+				ordered_indexes = list(reversed(ordered_indexes))
+
+				ordered_indexes = np.array(ordered_indexes)
 
 				#Top Scores
 				top_k = ordered_indexes[:k]
@@ -165,7 +175,7 @@ def local_model(data_matrix,unique_regulators,interactions):
 
 				target_expression = data_matrix[node]
 
-				sim_scores = [pearsonr(expression,target_expression)[0] for expression in neighbour_expression]
+				sim_scores = [find_pearson_similarity(expression,target_expression) for expression in neighbour_expression]
 
 				final_weight_list.append([(regulator,node),sum(sim_scores)])
 
@@ -177,10 +187,14 @@ def local_model(data_matrix,unique_regulators,interactions):
 				target_expression = data_matrix[node]
 				
 				#Pearson Correlation
-				sim_scores = np.array([pearsonr(expression,target_expression)[0] for expression in neighbour_expression])
+				sim_scores = np.array([find_pearson_similarity(expression,target_expression) for expression in neighbour_expression])
 
 				#Extract the Indexes of Top few scores
-				ordered_indexes = np.flip(np.argsort(sim_scores),axis=0)
+				ordered_indexes = np.argsort(sim_scores).tolist()
+
+				ordered_indexes = list(reversed(ordered_indexes))
+
+				ordered_indexes = np.array(ordered_indexes)
 
 				#Top Scores
 				top_k = ordered_indexes[:k]
@@ -192,7 +206,126 @@ def local_model(data_matrix,unique_regulators,interactions):
 		
 
 	return final_weight_list
+
+#Function to generate the AUC and AUPR scores
+def get_graph(edge_importances,interactions):
+	#Get minimum and maximum value
+	edge_score = [edge[1] for edge in edge_importances]
+
+	edge_score = sorted(edge_score)
+
+	#Minimum and Maximum
+	minimum = min(edge_score)
+
+	maximum = max(edge_score)
+
+	increment = (maximum - minimum) / len(edge_importances) 
+
+	threshold = minimum 
+
+	#How many amongst those extracted are correct 
+	precision = []
+
+	#How many correct from the ground truth has been extracted
+	recall = []
+
+	fpr = []
+
+	while threshold<maximum:
+		#Extract the edges above the threshold
+		
+		extracted_edges = [edge[0] for edge in edge_importances if edge[1]>threshold]
+
+		common = 0
+		for edge in extracted_edges:
+			for link in interactions:
+				if edge[0] == link[0] and edge[1] == link[1]:
+					common += 1
+		
+
+		#if (float(common) / float(len(interactions))) == 0.483870967742:
+		#	print extracted_edges
+		#	return
+
+
+		precision.append(float(common) / float(len(extracted_edges)))
+		recall.append(float(common) / float(len(interactions)))
+		fpr.append((float(len(extracted_edges)) - float(common)) / float(1560 - len(interactions)))
+
+		
+		
+		if float(common) / float(len(extracted_edges)) > 0.6 and float(common) / float(len(extracted_edges)) < 0.61:
+			
+
+			plot_graph = []
+
+			for edge in extracted_edges:
+				flag = 0
+				for link in interactions:
+					if edge[0] == link[0] and edge[1] == link[1]:
+						#Common element found 
+						plot_graph.append((edge[0],edge[1],1))
+						flag = 1
+
+				if flag == 0:
+					plot_graph.append((edge[0],edge[1],0.5))
+
+
+			g = nx.MultiGraph()
+
+			g.add_weighted_edges_from(plot_graph)
+
 	
+
+			edgewidth = [ d['weight'] for (u,v,d) in g.edges(data=True)]
+			
+
+			#pos = nx.spring_layout(g, iterations=50)
+			pos = nx.random_layout(g)
+			nx.draw_networkx_edges(g,pos,edge_color = edgewidth)
+			plt.show()
+
+
+
+
+				
+
+
+
+			
+
+			#print float(common) / float(len(interactions))
+			break
+		
+
+		#Increment Step
+		threshold += increment*4
+	
+	"""
+	#Calculation for area 
+	AUC_curve = metrics.auc(np.array(fpr),np.array(recall))
+	#print AUC_curve
+	AUPR_curve = metrics.auc(np.array(recall),np.array(precision))
+
+	#print AUPR_curve
+
+
+	plt.plot(fpr,recall)
+	plt.xlabel('False Positive Rate')
+	plt.ylabel('Recall')
+	plt.show()
+
+	plt.plot(recall,precision)
+	plt.xlabel('Recall')
+	plt.ylabel('Precision')
+	plt.show()	
+
+	
+
+	return AUC_curve, AUPR_curve """
+
+	return 
+
 
 def main():
 	#Transcriptional Factors along with Data Matrix
@@ -208,9 +341,27 @@ def main():
 	
 	#Generation of unique Regulators for Local Model
 	unique_regulators = list(set(regulators))
+	
+	AUC_list = []
+
+	#for k in range(2,20):
+
+	k = 10
 
 	#Edge importances based on local neighbourhood
-	edge_importances = local_model(data_matrix,unique_regulators,interactions)
+	edge_importances = local_model(data_matrix,unique_regulators,interactions,k)
+
+	#Calculate AUPR and AUC by moving the threshold
+	get_graph(edge_importances,interactions)
+
+	#AUC_list.append(AUROC)
+#	print AUC
+	
+
+
+	#print AUC_list
+
+	
 
 	
 
