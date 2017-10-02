@@ -297,20 +297,6 @@ def main():
 	print np.mean(np.array(AUC))
 
 
-		
-
-	#Pass the set into the model
-	#create_model(training,testing,data_matrix)
-
-
-
-
-
-
-
-
-
-	
 
 
 main()
