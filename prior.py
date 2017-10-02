@@ -40,13 +40,13 @@ from scipy.stats import pearsonr, spearmanr
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data2/tf.txt","r")
+	tf_file = open("data3/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data2/data.txt","r")
+	exp_file = open("data3/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -60,7 +60,7 @@ def create_data_matrix():
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data2.txt','r')
+	g_file = open('ground_truth/stamlab_for_data3.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- (Regulator --->  Target)
 	interactions = [ (int(line.split()[3]),int(line.split()[2])) for line in g_file.readlines()]
@@ -205,6 +205,7 @@ def generate_graph(edge_scores,testing):
 	recall = []
 	fprs = []
 
+	print len(positive_edges)
 	start = min_score
 
 	while start <= max_score:
@@ -251,8 +252,7 @@ def main():
 	positive_interactions = ground_truth()
 	
 	#Ground Truth : Negative Interactions : (Regulator, Target)
-	total_samples, negative_interactions = get_negative_interactions(positive_interactions)
-	
+	total_samples, negative_interactions = get_negative_interactions(positive_interactions)	
 	
 	#Randomly shuffle the lists before splitting into training and testing set
 	random.shuffle(total_samples)
@@ -269,6 +269,7 @@ def main():
 
 	#Split into Training and Testing Data
 	splitted_sample = split(total_samples)
+	splitted_sample = splitted_sample[:5]
 	
 	AUC = []
 	AUPR = []
@@ -287,11 +288,15 @@ def main():
 
 
 
-		auc, aupr = create_model(training_set,testing_set,data_matrix,10)
+		auc, aupr = create_model(training_set,testing_set,data_matrix,14)
 
 		AUC.append(auc)
 		AUPR.append(aupr)
+		print AUC
+		#break
 	#	const.append(const_aupr)
+
+
 
 
 	print np.mean(np.array(AUC))
