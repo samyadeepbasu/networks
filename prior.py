@@ -389,9 +389,7 @@ def main():
 	negative_samples = [link + (0,) for link in negative_interactions]
 
 	total_samples = positive_samples + negative_samples
-	
-	#Mix the positive and negative samples randomly
-	#random.shuffle(total_samples)
+
 
 	#Split into Training and Testing Data
 	splitted_sample = split(total_samples)
@@ -414,7 +412,7 @@ def main():
 
 
 
-		auc, aupr,const_aupr = create_model(training_set,testing_set,data_matrix,13)
+		auc, aupr,const_aupr = create_model(training_set,testing_set,data_matrix,12)
 
 		AUC.append(auc)
 		AUPR.append(aupr)
@@ -424,8 +422,6 @@ def main():
 		print const_aupr
 		print "#"
 
-		#break
-	#	const.append(const_aupr)
 
 
 
