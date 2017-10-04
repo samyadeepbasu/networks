@@ -35,6 +35,7 @@ from sklearn import metrics
 import networkx as nx
 from numpy import inf
 from scipy.stats import pearsonr, spearmanr
+from scipy import spatial
 
 
 #Function to Clean the data and create a training set
@@ -183,7 +184,16 @@ def get_negative_interactions(positive_interactions):
 
 #Function to find the distance
 def distance(current_target_expression,data_matrix,targets,i):
-	return spearmanr(current_target_expression,data_matrix[targets[i]])[0]
+	#return spearmanr(current_target_expression,data_matrix[targets[i]])[0]
+	return spatial.distance.correlation(current_target_expression,data_matrix[targets[i]])
+
+
+
+#Function to find the distance on similarity between signals
+def DTW_distance(current_target_expression,data_matrix,targets,i):
+	#To be filled up
+	return
+
 
 
 #Function to create and initialise the model 
@@ -370,7 +380,7 @@ def main():
 
 	time_series = time()
 
-	data_matrix, time_ordered = binning(data_matrix.transpose(),time_series,60)
+	data_matrix, time_ordered = binning(data_matrix.transpose(),time_series,700)
 
 	data_matrix = data_matrix.transpose()	
 
@@ -412,7 +422,7 @@ def main():
 
 
 
-		auc, aupr,const_aupr = create_model(training_set,testing_set,data_matrix,12)
+		auc, aupr,const_aupr = create_model(training_set,testing_set,data_matrix,18)
 
 		AUC.append(auc)
 		AUPR.append(aupr)
