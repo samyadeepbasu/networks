@@ -36,6 +36,7 @@ import networkx as nx
 from numpy import inf
 from scipy.stats import pearsonr, spearmanr
 from scipy import spatial
+from sklearn.metrics import mutual_info_score
 
 
 #Function to Clean the data and create a training set
@@ -185,7 +186,8 @@ def get_negative_interactions(positive_interactions):
 #Function to find the distance
 def distance(current_target_expression,data_matrix,targets,i):
 	#return spearmanr(current_target_expression,data_matrix[targets[i]])[0]
-	return spatial.distance.correlation(current_target_expression,data_matrix[targets[i]])
+	#return spatial.distance.correlation(current_target_expression,data_matrix[targets[i]])
+	return mutual_info_score(current_target_expression,data_matrix[targets[i]])
 
 
 
@@ -195,7 +197,6 @@ def DTW_distance(current_target_expression,data_matrix,targets,i):
 	return
 
 
-
 #Function to create and initialise the model 
 def create_model(training,testing,data_matrix,k):
 	
@@ -203,7 +204,7 @@ def create_model(training,testing,data_matrix,k):
 	training = [edge for edge in training if edge[2]==1]
 	
 	edge_scores = []
-
+	check = 0
 	#Score each edge in the testing data using the training set Graph
 	for edge in testing:
 		#Get the score for the edge
@@ -216,24 +217,32 @@ def create_model(training,testing,data_matrix,k):
 			if link[0] == regulator:
 				targets.append(link[1])
 
+		
+
 		#Score the edge with respect to the present training graph
 		current_target_expression = data_matrix[current_target]
 
 		scores = []
-
+		#print check
+		
 		for i in range(len(targets)):
 			scores.append(distance(current_target_expression,data_matrix,targets,i))
+			#scores.append(1)
 
 		if len(scores)<k:
-			edge_scores.append(sum(scores))
+			if len(scores) == 0:
+				edge_scores.append(0)
+			else:
+				edge_scores.append(float(sum(scores))/len(scores))
+			#edge_scores.append(1)
 
 		else:
 			score_index_sort = np.array(list(reversed(np.argsort(scores).tolist())))
 			top_k_scores = scores[:k]
-			edge_scores.append(sum(top_k_scores))
+			edge_scores.append(float(sum(top_k_scores))/k)
 
 
-	
+	#print edge_scores
 	#Once each edge got a score - Move the threshold and generate a AUPR and AUC
 	auc, aupr,const_aupr = generate_graph(edge_scores,testing)
 
@@ -252,15 +261,12 @@ def binning(state_matrix, times, k): #Time Passed is sorted
 	
 	#Labels for the clusters
 	labels = cluster.fit_predict(time_matrix)
-
 	
 	#Unique Labels
 	ranges = []
 	for i in range(0,len(labels)-1):
 		if labels[i+1] != labels[i]:
 			ranges.append(i)
-
-
 
 	start = 0
 	end = len(labels)
@@ -380,7 +386,7 @@ def main():
 
 	time_series = time()
 
-	data_matrix, time_ordered = binning(data_matrix.transpose(),time_series,700)
+	data_matrix, time_ordered = binning(data_matrix.transpose(),time_series,750)
 
 	data_matrix = data_matrix.transpose()	
 
@@ -422,7 +428,7 @@ def main():
 
 
 
-		auc, aupr,const_aupr = create_model(training_set,testing_set,data_matrix,18)
+		auc, aupr,const_aupr = create_model(training_set,testing_set,data_matrix,4)
 
 		AUC.append(auc)
 		AUPR.append(aupr)
