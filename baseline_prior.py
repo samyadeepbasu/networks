@@ -2,29 +2,46 @@
 	 Considerations : Steady State and Pseudo Time Series States   
 	 Task : Sequential Classification        
 	 Models Implemented : 1. KNN with Dynamic Time Warping
-	                      2. SVM
-	                      3. LSTM
-	                      4. CNN                                                """
+																	  """
 
 ############################################################################################
 ############################################################################################
 
 
-import math 
-import numpy as np 
+#Libraries
+import math
+import numpy as np
+import random
+import matplotlib.pyplot as plt 
+from sklearn.cluster import KMeans,AgglomerativeClustering
+from sklearn.metrics import silhouette_score, silhouette_samples
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics.pairwise import rbf_kernel,polynomial_kernel,sigmoid_kernel,laplacian_kernel,chi2_kernel
+from sklearn.ensemble import RandomForestRegressor,ExtraTreesRegressor, GradientBoostingRegressor
+from sklearn import metrics
+from sklearn.metrics import roc_auc_score
+import networkx as nx
 from numpy import inf
+from scipy.stats import pearsonr, spearmanr
+from scipy import spatial
+from sklearn.metrics import mutual_info_score
+from sdtw import SoftDTW
+from sdtw.distance import SquaredEuclidean
+from scipy.spatial.distance import euclidean
+from fastdtw import fastdtw
+from random import shuffle
 
 
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data2/tf.txt","r")
+	tf_file = open("data3/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data2/data.txt","r")
+	exp_file = open("data3/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -38,7 +55,7 @@ def create_data_matrix():
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data2.txt','r')
+	g_file = open('ground_truth/stamlab_for_data3.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- Target,Regulator
 	interactions = [ (int(line.split()[2]),int(line.split()[3])) for line in g_file.readlines()]
@@ -50,10 +67,29 @@ def ground_truth():
 	return interactions
 
 
+#Function to get a list of times
+def time():
+	#Time Measurements
+	time_series = open('data3/time.txt','r')
+
+	times = [line.split()[1] for line in time_series.readlines()]
+
+	#times = order_time()  #Using Imputation Algorithm and TSCAN
+
+	sorted_time = np.sort(np.array(times).astype(float))
+
+	#Normalise
+	#normalised_time = (sorted_time - np.min(sorted_time)) / (np.max(sorted_time) - np.min(sorted_time))
+	normalised_time = sorted_time / max(sorted_time)
+	#print normalised_time
+
+
+	return normalised_time
+
 #Function to order cells by pseudo time
 def pseudo_time(data_matrix):
 	#Open the file corresponding to Pseudo Time Measurement
-	time_file = open('data2/time.txt','r')
+	time_file = open('data3/time.txt','r')
 	
 	#Extraction of Pseudo Time from the List
 	ordered_cells = [line.split()[1] for line in time_file.readlines()]
@@ -126,8 +162,8 @@ def false_features(interactions,ordered_matrix):
 	for edge in interactions:
 		temp.append(edge[0])
 		temp.append(edge[1])
-    
-    #Unique Transcription Factors
+	
+	#Unique Transcription Factors
 	unique_nodes = list(set(temp))
 
 	false_vectors = []
@@ -153,53 +189,144 @@ def find_minimum(a,b,c):
 
 	return min_list[0]
 
-#Function to calculate the DTW distance matrix and churn out the similarity score -- Optimal Match between two sequences
-def DTW_matrix(seq_A, seq_B):
-	#Length of Sequence A
-	len1 = len(seq_A)
 
-	#Length of Sequence B
-	len2 = len(seq_B)
-    
-    #Initialise DTW Matrix
-	DTW = np.zeros((len1+1,len2+1))
+#Function to Compute the Distance Matrix
+def distance_matrix (total_set):
+	X = np.array([vector[0] for vector in total_set])
 
-	for i in range(1,len2+1):
-		DTW[0][i] = inf
+	#Initialise Matrix
+	dist_matrix = np.zeros((len(X),len(X)))
 
-	for j in range(1,len1+1):
-		DTW[j][0] = inf
+	for i in range(0,len(X)):
+		for j in range(i+1,len(X)):
+			#dist_matrix[i][j] = DTW_distance(X[i],X[j])
+			print i
+			dist_matrix[i][j], path = fastdtw(X[i].reshape(1,-1),X[j].reshape(1,-1), dist=euclidean)
 
 
-	#Fill up the DTW Matrix
-	for i in range(1,len1+1):
-		for j in range(1,len2+1):
-			# Current Distance + Minimum Cost from earlier computations
-			DTW[i][j] = math.pow((seq_A[i-1] - seq_B[j-1]),2) + find_minimum(DTW[i-1][j-1],DTW[i-1][j],DTW[i][j-1])	
-
-	print DTW
-	return DTW[len1][len2]
+	return dist_matrix
 
 
-#Function to create a model and train it -> SVM, LSTM, CNN
-def train_model(X,Y):
-	a = DTW_matrix(np.array([1,0,1,1]),np.array([0,0,1,1]))
+#Function to put the different states into bins
+def binning(state_matrix, times, k): #Time Passed is sorted
+	#Cluster the time points
+	cluster = AgglomerativeClustering(n_clusters=k)
+	
+	#Convert into matrix for K-means
+	time_matrix = np.array([[time] for time in times])
+	
+	#Labels for the clusters
+	labels = cluster.fit_predict(time_matrix)
+	
+	#Unique Labels
+	ranges = []
+	for i in range(0,len(labels)-1):
+		if labels[i+1] != labels[i]:
+			ranges.append(i)
+
+	start = 0
+	end = len(labels)
+
+	#Create Bins for Clustering the states
+	bins = []
+
+	for i in range(len(ranges)):
+		bins.append((start,ranges[i]+1))
+		start = ranges[i]+1
+	
+	#Append the last one
+	bins.append((start,end))
+
+	""" Averaging out the states """
+	
+	new_state_matrix = []
+	total = 0
+	for bin in bins:
+		temp_matrix = state_matrix[bin[0]:bin[1]]
+		#Average out the expression levels for each gene
+		temp = []
+
+		
+		for i in range(0,len(temp_matrix[0])):
+			temp.append(np.mean(temp_matrix[:,i]))
 
 
-	return
+		new_state_matrix.append(temp)
 
+
+	
+	new_state_matrix = np.array(new_state_matrix)
+
+	""" Create a new time matrix """
+
+	new_time_matrix = []
+
+	for bin in bins:
+		new_time_matrix.append(times[bin[0]])
+
+
+	return new_state_matrix, new_time_matrix
+
+
+
+#Function to train the model using KNN + DTW
+def train_model(training, testing):
+	""" Algorithm : For each edge in the testing set, create a distance matrix & extract the data point to which it has the Smallest Distance """
+	
+	predictions = []
+	
+	i = 0
+
+	for edge in testing:
+		signal_vector = edge[0]
+
+		distances = []
+
+		for vec in training:
+			training_signal_vector = vec[0]
+			dist ,path = fastdtw(signal_vector.reshape(1,-1),training_signal_vector.reshape(1,-1), dist=euclidean)
+
+			distances.append(dist)
+
+
+		distances = np.array(distances)
+
+		sorted_indexes = np.argsort(distances)
+
+		predictions.append(training[sorted_indexes[0]][1])
+
+		print i 
+		i += 1
+
+	#print "#"
+	predictions = np.array(predictions)
+	true_labels = np.array([edge[1] for edge in testing])
+
+	score = roc_auc_score(true_labels,predictions)
+
+	return score
+
+ 
 def main():
 	tf, data_matrix = create_data_matrix()
 
-	ordered_matrix = pseudo_time(data_matrix)
+	data_matrix = data_matrix.astype(float)
+
+	data_matrix = pseudo_time(data_matrix)
+
+	time_series = time()
+
+	data_matrix, time_ordered = binning(data_matrix.transpose(),time_series,100)
+
+	data_matrix = data_matrix.transpose()	
 
 	interactions = ground_truth()
 
-	feature_vectors_true = construct_features(interactions, ordered_matrix)
+	feature_vectors_true = construct_features(interactions, data_matrix)
 
 	y1 = np.repeat(1,len(feature_vectors_true))
 
-	feature_vectors_false = false_features(interactions,ordered_matrix)
+	feature_vectors_false = false_features(interactions,data_matrix)
 
 	y2 = np.repeat(0,len(feature_vectors_false))
 
@@ -207,18 +334,24 @@ def main():
 
 	X = np.concatenate((feature_vectors_true,feature_vectors_false),axis=0)	
 
-	train_model(X,Y)
+	#Generate Random Numbers
+	total_set = [(X[i],Y[i]) for i in range(0,len(X))]
 
+	#Shuffle the list
+	shuffle(total_set)
 
+	#DTW_matrix = distance_matrix(total_set)
 
+	training_set = total_set[0: int(len(total_set)*0.8)]
 
+	testing_set = total_set[int(len(total_set)*0.8):]
 
+	AUC_score = train_model(training_set,testing_set)
 
-
-
-
+	print AUC_score
 	
 	return
+
 
 
 
