@@ -35,13 +35,13 @@ from random import shuffle
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data3/tf.txt","r")
+	tf_file = open("data2/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data3/data.txt","r")
+	exp_file = open("data2/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -55,7 +55,7 @@ def create_data_matrix():
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data3.txt','r')
+	g_file = open('ground_truth/stamlab_for_data2.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- Target,Regulator
 	interactions = [ (int(line.split()[2]),int(line.split()[3])) for line in g_file.readlines()]
@@ -70,7 +70,7 @@ def ground_truth():
 #Function to get a list of times
 def time():
 	#Time Measurements
-	time_series = open('data3/time.txt','r')
+	time_series = open('data2/time.txt','r')
 
 	times = [line.split()[1] for line in time_series.readlines()]
 
@@ -89,7 +89,7 @@ def time():
 #Function to order cells by pseudo time
 def pseudo_time(data_matrix):
 	#Open the file corresponding to Pseudo Time Measurement
-	time_file = open('data3/time.txt','r')
+	time_file = open('data2/time.txt','r')
 	
 	#Extraction of Pseudo Time from the List
 	ordered_cells = [line.split()[1] for line in time_file.readlines()]
@@ -316,39 +316,52 @@ def main():
 
 	time_series = time()
 
-	data_matrix, time_ordered = binning(data_matrix.transpose(),time_series,100)
+	main_matrix = data_matrix.copy()
 
-	data_matrix = data_matrix.transpose()	
+	AUC_total = []
 
-	interactions = ground_truth()
+	for k in range(15,60):
+		data_matrix, time_ordered = binning(main_matrix.transpose(),time_series,25)
 
-	feature_vectors_true = construct_features(interactions, data_matrix)
+		data_matrix = data_matrix.transpose()	
 
-	y1 = np.repeat(1,len(feature_vectors_true))
+		interactions = ground_truth()
 
-	feature_vectors_false = false_features(interactions,data_matrix)
+		feature_vectors_true = construct_features(interactions, data_matrix)
 
-	y2 = np.repeat(0,len(feature_vectors_false))
+		y1 = np.repeat(1,len(feature_vectors_true))
 
-	Y = np.concatenate((y1,y2))
+		feature_vectors_false = false_features(interactions,data_matrix)
 
-	X = np.concatenate((feature_vectors_true,feature_vectors_false),axis=0)	
+		y2 = np.repeat(0,len(feature_vectors_false))
 
-	#Generate Random Numbers
-	total_set = [(X[i],Y[i]) for i in range(0,len(X))]
+		Y = np.concatenate((y1,y2))
 
-	#Shuffle the list
-	shuffle(total_set)
+		X = np.concatenate((feature_vectors_true,feature_vectors_false),axis=0)	
 
-	#DTW_matrix = distance_matrix(total_set)
+		#Generate Random Numbers
+		total_set = [(X[i],Y[i]) for i in range(0,len(X))]
 
-	training_set = total_set[0: int(len(total_set)*0.8)]
+		#Shuffle the list
+		shuffle(total_set)
 
-	testing_set = total_set[int(len(total_set)*0.8):]
+		#DTW_matrix = distance_matrix(total_set)
 
-	AUC_score = train_model(training_set,testing_set)
+		training_set = total_set[0: int(len(total_set)*0.8)]
 
-	print AUC_score
+		testing_set = total_set[int(len(total_set)*0.8):]
+
+		AUC_score = train_model(training_set,testing_set)
+
+		AUC_total.append(AUC_score)
+
+	
+
+	print AUC_total
+	print max(AUC_total)
+	X = range(0,len(AUC_total))
+	plt.plot(X,AUC_total)
+	plt.show()
 	
 	return
 
