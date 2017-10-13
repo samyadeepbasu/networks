@@ -30,6 +30,7 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans,AgglomerativeClustering
 from sklearn.metrics import silhouette_score, silhouette_samples
 from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics.pairwise import rbf_kernel,polynomial_kernel,sigmoid_kernel,laplacian_kernel,chi2_kernel
 from sklearn.ensemble import RandomForestRegressor,ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn import metrics
 import networkx as nx
@@ -187,8 +188,9 @@ def get_negative_interactions(positive_interactions):
 def distance(current_target_expression,data_matrix,targets,i):
 	#return spearmanr(current_target_expression,data_matrix[targets[i]])[0]
 	#return spatial.distance.correlation(current_target_expression,data_matrix[targets[i]])
-	return mutual_info_score(current_target_expression,data_matrix[targets[i]])
-
+	#return mutual_info_score(current_target_expression,data_matrix[targets[i]])
+	return rbf_kernel(current_target_expression.reshape(1,-1),data_matrix[targets[i]].reshape(1,-1))
+	
 
 
 #Function to find the distance on similarity between signals
@@ -242,7 +244,7 @@ def create_model(training,testing,data_matrix,k):
 			edge_scores.append(float(sum(top_k_scores))/k)
 
 
-	#print edge_scores
+		#print scores
 	#Once each edge got a score - Move the threshold and generate a AUPR and AUC
 	auc, aupr,const_aupr = generate_graph(edge_scores,testing)
 
@@ -253,6 +255,9 @@ def create_model(training,testing,data_matrix,k):
 
 #Function to put the different states into bins
 def binning(state_matrix, times, k): #Time Passed is sorted
+
+	#temp_state_matrix = state_matrix.copy()
+
 	#Cluster the time points
 	cluster = AgglomerativeClustering(n_clusters=k)
 	
@@ -386,64 +391,81 @@ def main():
 
 	time_series = time()
 
-	data_matrix, time_ordered = binning(data_matrix.transpose(),time_series,750)
+	state_range = range(300,700)
 
-	data_matrix = data_matrix.transpose()	
+	main_matrix = data_matrix.copy()
 
-	#Ground Truth : Positive Interactions : (Regulator, Target)
-	positive_interactions = ground_truth()
-	
-	#Ground Truth : Negative Interactions : (Regulator, Target)
-	total_samples, negative_interactions = get_negative_interactions(positive_interactions)	
-	
-	#Randomly shuffle the lists before splitting into training and testing set
-	random.shuffle(total_samples)
-	random.shuffle(positive_interactions)
-	random.shuffle(negative_interactions)
+	AUC_total = []
 
-	positive_samples = [link + (1,) for link in positive_interactions]
-	negative_samples = [link + (0,) for link in negative_interactions]
+	for k in state_range:
 
-	total_samples = positive_samples + negative_samples
+		data_matrix, time_ordered = binning(main_matrix.transpose(),time_series,200)
 
+		data_matrix = data_matrix.transpose()	
 
-	#Split into Training and Testing Data
-	splitted_sample = split(total_samples)
-	splitted_sample = splitted_sample[:5]
-	
-	AUC = []
-	AUPR = []
-	const = []
+		#Ground Truth : Positive Interactions : (Regulator, Target)
+		positive_interactions = ground_truth()
+		
+		#Ground Truth : Negative Interactions : (Regulator, Target)
+		total_samples, negative_interactions = get_negative_interactions(positive_interactions)	
+		
+		#Randomly shuffle the lists before splitting into training and testing set
+		random.shuffle(total_samples)
+		random.shuffle(positive_interactions)
+		random.shuffle(negative_interactions)
 
-	#for k in range(2,12):
-	for i in range(0,len(splitted_sample)):
-		testing_set = splitted_sample[i]
-		training_set_index = range(0,len(splitted_sample))
-		training_set_index.remove(i)
+		positive_samples = [link + (1,) for link in positive_interactions]
+		negative_samples = [link + (0,) for link in negative_interactions]
 
-		training_set = []
-
-		for index in training_set_index:
-			training_set += splitted_sample[index]
+		total_samples = positive_samples + negative_samples
 
 
+		#Split into Training and Testing Data
+		splitted_sample = split(total_samples)
+		splitted_sample = splitted_sample[:5]
+		
+		AUC = []
+		AUPR = []
+		const = []
 
-		auc, aupr,const_aupr = create_model(training_set,testing_set,data_matrix,4)
+		#for k in range(2,12):
+		for i in range(0,len(splitted_sample)):
+			testing_set = splitted_sample[i]
+			training_set_index = range(0,len(splitted_sample))
+			training_set_index.remove(i)
 
-		AUC.append(auc)
-		AUPR.append(aupr)
-		print auc
-		print aupr
+			training_set = []
 
-		print const_aupr
-		print "#"
+			for index in training_set_index:
+				training_set += splitted_sample[index]
 
 
 
+			auc, aupr,const_aupr = create_model(training_set,testing_set,main_matrix,16)
+
+			AUC.append(auc)
+			AUPR.append(aupr)
+			#print auc
+			#print aupr
+
+			#print const_aupr
+			#print "#"
 
 
-	print np.mean(np.array(AUC))
-	print np.mean(np.array(AUPR))
+
+
+		print np.mean(np.array(AUC))
+		print ""
+		AUC_total.append(np.mean(np.array(AUC)))
+		break
+
+
+
+	#X = range(0,len(AUC_total))
+
+	#plt.plot(X,AUC_total)
+	#plt.show()
+		
 
 
 
