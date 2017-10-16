@@ -30,6 +30,9 @@ from sdtw.distance import SquaredEuclidean
 from scipy.spatial.distance import euclidean
 from fastdtw import fastdtw
 from random import shuffle
+from sklearn import svm
+import matplotlib.lines as mlines
+import matplotlib.transforms as mtransforms
 
 
 #Function to Clean the data and create a training set
@@ -295,7 +298,7 @@ def train_model(training, testing):
 
 		predictions.append(training[sorted_indexes[0]][1])
 
-		print i 
+		#print i 
 		i += 1
 
 	#print "#"
@@ -304,9 +307,51 @@ def train_model(training, testing):
 
 	score = roc_auc_score(true_labels,predictions)
 
+
 	return score
 
- 
+
+
+#Function to train a SVM Model
+def SVM_model(training,testing):
+	training_vectors = np.array([vector[0] for vector in training])
+	testing_vectors = np.array([vector[0] for vector in testing])
+
+	true_labels = np.array([vector[1] for vector in training])
+	testing_labels = np.array([vector[1] for vector in testing])
+
+	print len(np.where(true_labels==1)[0])
+	print len(np.where(true_labels==0)[0])
+
+	#SVM model using class imbalance penalty
+	clf = svm.SVC(kernel='rbf',class_weight={1: 1.44})
+	clf.fit(training_vectors,true_labels)
+
+	predicted_labels = clf.predict(testing_vectors)
+
+	score = roc_auc_score(testing_labels,predicted_labels)
+
+	fpr, tpr, thresholds = metrics.roc_curve(testing_labels,predicted_labels,drop_intermediate=False)
+
+	precision, recall, thresholds = metrics.precision_recall_curve(testing_labels,predicted_labels)
+
+	print metrics.accuracy_score(testing_labels,predicted_labels)
+	print "#"
+
+	#print precision
+    
+	#Plots
+	fig, ax = plt.subplots()
+	ax.plot(np.array(fpr),np.array(tpr), c='black')
+	line = mlines.Line2D([0, 1], [0, 1], color='red')
+	transform = ax.transAxes
+	line.set_transform(transform)
+	ax.add_line(line)
+	plt.show()
+
+	return score
+
+
 def main():
 	tf, data_matrix = create_data_matrix()
 
@@ -320,8 +365,8 @@ def main():
 
 	AUC_total = []
 
-	for k in range(15,60):
-		data_matrix, time_ordered = binning(main_matrix.transpose(),time_series,25)
+	for k in range(15,90):
+		data_matrix, time_ordered = binning(main_matrix.transpose(),time_series,60)
 
 		data_matrix = data_matrix.transpose()	
 
@@ -351,17 +396,21 @@ def main():
 
 		testing_set = total_set[int(len(total_set)*0.8):]
 
-		AUC_score = train_model(training_set,testing_set)
+		#AUC_score = train_model(training_set,testing_set)
+		AUC_score = SVM_model(training_set,testing_set)
+		print AUC_score
+		
 
 		AUC_total.append(AUC_score)
+		break
 
 	
 
-	print AUC_total
+	#print AUC_total
 	print max(AUC_total)
-	X = range(0,len(AUC_total))
-	plt.plot(X,AUC_total)
-	plt.show()
+	#X = range(0,len(AUC_total))
+	#plt.plot(X,AUC_total)
+	#plt.show()
 	
 	return
 
