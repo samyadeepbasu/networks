@@ -38,18 +38,28 @@ from numpy import inf
 from scipy.stats import pearsonr, spearmanr
 from scipy import spatial
 from sklearn.metrics import mutual_info_score
+from sdtw import SoftDTW
+from sdtw.distance import SquaredEuclidean
+from scipy.spatial.distance import euclidean
+from fastdtw import fastdtw
+import matplotlib.lines as mlines
+import matplotlib.transforms as mtransforms
+from sklearn import svm
 
+
+###############################################################################################################
+###############################################################################################################
 
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data3/tf.txt","r")
+	tf_file = open("data2/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data3/data.txt","r")
+	exp_file = open("data2/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -63,7 +73,7 @@ def create_data_matrix():
 #Function to order cells by pseudo time
 def pseudo_time(data_matrix):
 	#Open the file corresponding to Pseudo Time Measurement
-	time_file = open('data3/time.txt','r')
+	time_file = open('data2/time.txt','r')
 	
 	#Extraction of Pseudo Time from the List
 	ordered_cells = [line.split()[1] for line in time_file.readlines()]
@@ -91,7 +101,7 @@ def pseudo_time(data_matrix):
 #Function to get a list of times
 def time():
 	#Time Measurements
-	time_series = open('data3/time.txt','r')
+	time_series = open('data2/time.txt','r')
 
 	times = [line.split()[1] for line in time_series.readlines()]
 
@@ -111,7 +121,7 @@ def time():
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data3.txt','r')
+	g_file = open('ground_truth/stamlab_for_data2.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- (Regulator --->  Target)
 	interactions = [ (int(line.split()[3]),int(line.split()[2])) for line in g_file.readlines()]
@@ -165,7 +175,6 @@ def split(total_samples):
 	return chunks	
 
 
-
 #Function to generate the negative samples
 def get_negative_interactions(positive_interactions):
 	#Find the unique transcription factors
@@ -184,18 +193,91 @@ def get_negative_interactions(positive_interactions):
 	return total_sample, negative_samples
 
 
+
+#Function to get the minimum of three numbers
+def find_minimum(a,b,c):
+	minimum_list = []
+	minimum_list.append(a)
+	minimum_list.append(b)
+	minimum_list.append(c)
+
+	min_list = sorted(minimum_list)
+
+	return min_list[0]
+
+
 #Function to find the distance
 def distance(current_target_expression,data_matrix,targets,i):
 	#return spearmanr(current_target_expression,data_matrix[targets[i]])[0]
 	#return spatial.distance.correlation(current_target_expression,data_matrix[targets[i]])
 	#return mutual_info_score(current_target_expression,data_matrix[targets[i]])
 	return rbf_kernel(current_target_expression.reshape(1,-1),data_matrix[targets[i]].reshape(1,-1))
-	
+	#return DTW_distance(current_target_expression,data_matrix[targets[i]])
+
+	#D = SquaredEuclidean(current_target_expression.reshape(1,-1),data_matrix[targets[i]].reshape(1,-1))
+	#sdtw = SoftDTW(D, gamma=1.0)
+	#distance, path = fastdtw(current_target_expression.reshape(1,-1),data_matrix[targets[i]].reshape(1,-1), dist=euclidean)
+
+	#return 1/sdtw.compute()
+
+	#return 1/float(distance)
 
 
-#Function to find the distance on similarity between signals
-def DTW_distance(current_target_expression,data_matrix,targets,i):
-	#To be filled up
+#Function to create classification model for each local region
+def create_classification_model(training,testing,data_matrix):
+	""" Algorithm : For each edge in testing set
+					  -> Go to the local neighbourhood 
+					  -> Build a local classification model 
+					  -> Get the score for the edge                 """
+	#True Labels	
+	true_labels = [edge[2] for edge in testing]
+
+
+    
+    #Scores based on local classification model
+	edge_scores = []
+
+	for edge in testing:
+		#Get the regulator
+		regulator = edge[0]
+
+		targets = []
+
+		for link in training:
+			if link[0] == regulator:
+				targets.append((data_matrix[link[1]],link[2]))
+
+
+		X = np.array([target[0] for target in targets])
+
+		Y = np.array([target[1] for target in targets])
+
+		clf = svm.SVR(kernel='rbf')
+		clf.fit(X,Y)
+
+		predict_score = clf.predict(data_matrix[edge[1]].reshape(1,-1))
+		
+		edge_scores.append(predict_score[0])
+
+
+	edge_scores = np.array(edge_scores)
+
+	score = metrics.roc_auc_score(true_labels,edge_scores)
+
+	print score
+
+	fpr, tpr, thresholds = metrics.roc_curve(true_labels,edge_scores,drop_intermediate=False)
+
+	fig, ax = plt.subplots()
+	ax.plot(np.array(fpr),np.array(tpr), c='black')
+	line = mlines.Line2D([0, 1], [0, 1], color='red')
+	transform = ax.transAxes
+	line.set_transform(transform)
+	ax.add_line(line)
+	plt.show()
+
+
+
 	return
 
 
@@ -225,7 +307,6 @@ def create_model(training,testing,data_matrix,k):
 		current_target_expression = data_matrix[current_target]
 
 		scores = []
-		#print check
 		
 		for i in range(len(targets)):
 			scores.append(distance(current_target_expression,data_matrix,targets,i))
@@ -244,7 +325,6 @@ def create_model(training,testing,data_matrix,k):
 			edge_scores.append(float(sum(top_k_scores))/k)
 
 
-		#print scores
 	#Once each edge got a score - Move the threshold and generate a AUPR and AUC
 	auc, aupr,const_aupr = generate_graph(edge_scores,testing)
 
@@ -373,7 +453,16 @@ def generate_graph(edge_scores,testing):
 	AUPR_curve = metrics.auc(np.array(recall),np.array(precision))
 	AUC_curve = metrics.auc(np.array(fprs),np.array(recall))
 
-	plt.plot(np.array(fprs),np.array(recall))
+	#plt.plot(np.array(fprs),np.array(recall))
+	#plt.show()
+
+	#Plots
+	fig, ax = plt.subplots()
+	ax.plot(np.array(fprs),np.array(recall), c='black')
+	line = mlines.Line2D([0, 1], [0, 1], color='red')
+	transform = ax.transAxes
+	line.set_transform(transform)
+	ax.add_line(line)
 	plt.show()
 
 	
@@ -387,7 +476,7 @@ def main():
 
 	data_matrix = data_matrix.astype(float)
 
-	data_matrix = pseudo_time(data_matrix)
+	#data_matrix = pseudo_time(data_matrix)
 
 	time_series = time()
 
@@ -399,9 +488,9 @@ def main():
 
 	for k in state_range:
 
-		data_matrix, time_ordered = binning(main_matrix.transpose(),time_series,200)
+		#data_matrix, time_ordered = binning(main_matrix.transpose(),time_series,80)
 
-		data_matrix = data_matrix.transpose()	
+		#data_matrix = data_matrix.transpose()	
 
 		#Ground Truth : Positive Interactions : (Regulator, Target)
 		positive_interactions = ground_truth()
@@ -441,22 +530,20 @@ def main():
 
 
 
-			auc, aupr,const_aupr = create_model(training_set,testing_set,main_matrix,16)
+			#auc, aupr,const_aupr = create_model(training_set,testing_set,main_matrix,10)
+			create_classification_model(training_set,testing_set,main_matrix)
 
-			AUC.append(auc)
-			AUPR.append(aupr)
-			#print auc
-			#print aupr
-
-			#print const_aupr
-			#print "#"
+			#AUC.append(auc)
+			#AUPR.append(aupr)
+			
+			
 
 
 
 
-		print np.mean(np.array(AUC))
-		print ""
-		AUC_total.append(np.mean(np.array(AUC)))
+		#print np.mean(np.array(AUC))
+		#print ""
+		#AUC_total.append(np.mean(np.array(AUC)))
 		break
 
 
