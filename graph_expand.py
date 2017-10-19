@@ -37,13 +37,13 @@ from sklearn.linear_model import LogisticRegression, LinearRegression, Lasso, Ri
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data2/tf.txt","r")
+	tf_file = open("data3/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data2/data.txt","r")
+	exp_file = open("data3/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -69,7 +69,7 @@ def find_unique_tfs(interactions):
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data2.txt','r')
+	g_file = open('ground_truth/stamlab_for_data3.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- (Regulator --->  Target)
 	interactions = [ (int(line.split()[3]),int(line.split()[2])) for line in g_file.readlines()]
@@ -112,6 +112,25 @@ def gaussian(data_matrix):
 	return data_matrix
 
 
+#Function to split into training and testing sample
+def split(total_samples):
+	
+	number_edges = len(total_samples)
+	
+	number_testing = int(0.2*number_edges)
+
+	#Do a random shuffle
+	random.shuffle(total_samples)
+
+	chunks = []
+	
+	for i in range(0,len(total_samples),number_testing):
+		chunks.append(total_samples[i:i+number_testing])
+
+
+	return chunks	
+
+
 #Function to train an autoencoder and generate a latent representation of the cells
 def train(data_matrix,k):
 	#Input without noise
@@ -121,7 +140,7 @@ def train(data_matrix,k):
 	output_data = input_data
 
 	#Adding Noise to th
-	input_data = input_data + 0.2 * np.random.random_sample((input_data.shape))
+	input_data = input_data + 0.4 * np.random.random_sample((input_data.shape))
 
 	#Keep Probability for Dropouts
 	keep_prob = tf.placeholder(tf.float32)
@@ -188,7 +207,7 @@ def train(data_matrix,k):
 		n_rounds = 5000
 
 		#Batch size -> Max Batch Size : 373
-		batch_size = 30
+		batch_size = 35
 
 		for i in range(n_rounds):
 			#Generate an array of random numbers from pool of 0 to n_samples
@@ -225,54 +244,93 @@ def train(data_matrix,k):
 
 
 #Function to create a graph
-def create_graph(total_samples,positive_interactions,negative_interactions,data_matrix):
+def create_graph(total_samples,test_graph,data_matrix):
 	#Regulators
 	similarity_matrix = []
 
 	#Create a training graph for the positive interactions
-	unique_tfs = find_unique_tfs(positive_interactions)
+	unique_tfs = find_unique_tfs(total_samples)
 
 	for gene in unique_tfs:
 		#Extract it's neighbours
- 		vector = np.zeros((len(unique_tfs)))
+		vector = np.zeros((len(unique_tfs)))
 
- 		for neighbour in positive_interactions:
- 			if neighbour[0] == gene:
- 				#Get the target 
- 				target_index = unique_tfs.index(neighbour[1])
+		for neighbour in total_samples:
+			if neighbour[0] == gene:
+				#Get the target 
+				target_index = unique_tfs.index(neighbour[1])
 
- 				#Get the similarity
- 				vector[target_index] = similarity(data_matrix[gene],data_matrix[neighbour[1]])
-
-
-
- 		similarity_matrix.append(vector)
+				#Get the similarity
+				vector[target_index] = similarity(data_matrix[gene],data_matrix[neighbour[1]])
 
 
- 	similarity_matrix = np.array(similarity_matrix)
 
- 	#Convert into Normal Distribution
+		similarity_matrix.append(vector)
+
+
+	similarity_matrix = np.array(similarity_matrix)
+
+	#Convert into Normal Distribution
 	converted_matrix = gaussian(similarity_matrix.copy())
+	#converted_matrix = similarity_matrix.copy()
 
 	#Get a latent representation of data -> Parameters : Number of Hidden Units
 	weights, biases = train(converted_matrix,10)
 
+	#Matrix with the Node Embeddings
 	reduced_matrix = np.matmul(converted_matrix,weights) + biases
 
-	print len(reduced_matrix)
+	edge_scores = []
+
+	#Create a model
+	for edge in test_graph:
+		regulator = edge[0]
+
+		targets = []
+
+		for link in total_samples:
+			if link[0] == regulator:
+				targets.append((reduced_matrix[unique_tfs.index(link[1])],link[2]))
+
+		X = np.array([target[0] for target in targets])
+
+		Y = np.array([target[1] for target in targets])
+
+		#Calculate similarity
+		current_target_expression = reduced_matrix[unique_tfs.index(edge[1])]
+
+		#clf = svm.SVR(kernel='rbf')
+		#clf = LinearRegression()
+		#clf = GradientBoostingRegressor(n_estimators=30)
+		clf = Lasso()
+		clf.fit(X,Y)
+		predict_score = clf.predict(current_target_expression.reshape(1,-1))
+
+		edge_scores.append(predict_score[0])
 
 
 
- 	
- 			
- 		
+	edge_scores = np.array(edge_scores)
 
- 	
+	true_labels = [edge[2] for edge in test_graph]
 
+	score = metrics.roc_auc_score(true_labels,edge_scores)
+	
+	print "#"
+	print score
 
+	fpr, tpr, thresholds = metrics.roc_curve(true_labels,edge_scores,drop_intermediate=False)
 
+	fig, ax = plt.subplots()
+	ax.plot(np.array(fpr),np.array(tpr), c='black')
+	line = mlines.Line2D([0, 1], [0, 1], color='red')
+	transform = ax.transAxes
+	line.set_transform(transform)
+	ax.add_line(line)
+	plt.show()
 
-	return
+	return score
+
 
 def main():
 	transcription_factors, data_matrix = create_data_matrix()
@@ -284,8 +342,33 @@ def main():
 
 	#Ground Truth : Negative Interactions : (Regulator, Target)
 	total_samples, negative_interactions = get_negative_interactions(positive_interactions)
+	
+	positive_samples = [link + (1,) for link in positive_interactions]
+	negative_samples = [link + (0,) for link in negative_interactions]
+	total_samples = positive_samples + negative_samples
 
-	create_graph(total_samples,positive_interactions,negative_interactions,data_matrix)
+	random.shuffle(total_samples)
+
+	#Split into Training and Testing Data
+	splitted_sample = split(total_samples)
+	splitted_sample = splitted_sample[:5]
+
+	AUC = []
+
+	#for k in range(2,12):
+	for i in range(0,len(splitted_sample)):
+		testing_set = splitted_sample[i]
+		training_set_index = range(0,len(splitted_sample))
+		training_set_index.remove(i)
+		training_set = []
+		for index in training_set_index:
+			training_set += splitted_sample[index]
+
+		AUC.append(create_graph(training_set,testing_set,data_matrix))
+
+
+
+	print np.mean(np.array(AUC))
 
 	
 
