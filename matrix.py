@@ -122,40 +122,65 @@ def create_factorization_model(training_matrix,k,N):
 
 	P = np.random.rand(N,k)
 	Q = np.random.rand(N,k)
+	Q = Q.transpose()
 
 	#Number of steps for Gradient Descent -- In each turn the whole matrix will be updated
-	epoch = 5000
+	epochs = 5000
 
 	#Learning Rate
 	learning_rate = 0.0002
 
-	for i in range(0,len(training_matrix)):
-		for j in range(0,len(training_matrix[0])):
-			prediction = 0
+	beta = 0.02
 
-			#Predict only for those positions in the training data
-			if training_matrix[i][j] > 0:
-				for K in range(0,k):
-					prediction += P[i][K]*Q[K][j]
+	for steps in range(0,epochs):
+		for i in range(0,len(training_matrix)):
+			for j in range(0,len(training_matrix[0])):
+				prediction = 0
 
-
-				#Compute the error
-				error = training_matrix[i][j] - prediction
-
-				#Update for the Gradient Descent Step
-				
+				#Predict only for those positions in the training data
+				if training_matrix[i][j] > 0:
+					for K in range(0,k):
+						prediction += P[i][K]*Q[K][j]
 
 
+					#Compute the error
+					error = training_matrix[i][j] - prediction
+
+					#Update for the Gradient Descent Step
+					for K in range(0,k):
+						P[i][K] = P[i][K] + learning_rate * (error * Q[K][j] - beta*P[i][K])
+						Q[K][j] = Q[K][j] + learning_rate * (error * P[i][K] - beta*Q[K][j])
+
+
+
+		#Compute the loss here
+		updated_matrix = np.matmul(P,Q)
+
+		loss = 0
+
+		for i in range(0,len(training_matrix)):
+			for j in range(0,len(training_matrix[0])):
+				#If the position is in the training set
+				if training_matrix[i][j] > 0:
+					#Compute the loss after update
+					positional_value = 0
+
+					regularization = 0
+
+					for K in range(0,k):
+						positional_value += P[i][K]*Q[K][j]
+						regularization += pow(P[i][K],2) + pow(Q[K][j],2)
+
+					loss += 0.5 * pow((training_matrix[i][j] - positional_value),2) + (beta/2) * (regularization)
+
+		print loss
 
 
 
 
 
+	return P,Q
 
-	
-
-
-	return
 
 #Function 
 def main():
@@ -207,7 +232,9 @@ def main():
 
 		training_matrix = manipulate_matrix(main_matrix.copy(),unique_tfs,testing_set)
 
-		completed_matrix = create_factorization_model(training_matrix,10,len(unique_tfs))
+		P, Q = create_factorization_model(training_matrix,10,len(unique_tfs))
+
+
 
 		break
 
