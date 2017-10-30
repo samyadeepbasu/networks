@@ -4,7 +4,10 @@
 import numpy as np
 import random
 from sklearn.metrics import mutual_info_score
-
+from sklearn import metrics
+from sklearn.metrics.pairwise import rbf_kernel,polynomial_kernel,sigmoid_kernel,laplacian_kernel,chi2_kernel
+from scipy.stats import pearsonr, spearmanr
+from scipy import spatial
 
 #Function to Clean the data and create a training set
 def create_data_matrix():
@@ -29,6 +32,8 @@ def create_data_matrix():
 #Function to fill up the matrix before factorization
 def distance_information(a,b):
 	return mutual_info_score(a,b)
+	#return spearmanr(a,b)[0]
+	#return rbf_kernel(a.reshape(1,-1),b.reshape(1,-1))
 
 
 #Function to find the unique transcriptional factors 
@@ -77,11 +82,16 @@ def get_negative_interactions(positive_interactions):
 	return total_sample, negative_samples
 
 #Function to fill the matrix
-def fill_matrix(main_matrix,data_matrix,unique_tfs):
+def fill_matrix(main_matrix,total_samples,unique_tfs):
+	"""
 	for i in range(0,len(unique_tfs)):
 		for j in range(0,len(unique_tfs)):
 			if i!=j:
 				main_matrix[i][j] = distance_information(data_matrix[unique_tfs[i]],data_matrix[unique_tfs[j]])
+	"""
+
+	for edge in total_samples:
+		main_matrix[unique_tfs.index(edge[0])][unique_tfs.index(edge[1])] = edge[2]
 
 
 	return 
@@ -121,14 +131,14 @@ def create_factorization_model(training_matrix,k,N):
 	# K : Parameter for Matrix Factorization
 
 	P = np.random.rand(N,k)
-	Q = np.random.rand(N,k)
-	Q = Q.transpose()
+	#Q = np.random.rand(N,k)
+	Q = P.transpose()
 
 	#Number of steps for Gradient Descent -- In each turn the whole matrix will be updated
 	epochs = 5000
 
 	#Learning Rate
-	learning_rate = 0.0002
+	learning_rate = 0.01
 
 	beta = 0.02
 
@@ -138,9 +148,10 @@ def create_factorization_model(training_matrix,k,N):
 				prediction = 0
 
 				#Predict only for those positions in the training data
-				if training_matrix[i][j] > 0:
+				if training_matrix[i][j] != 0:
 					for K in range(0,k):
 						prediction += P[i][K]*Q[K][j]
+
 
 
 					#Compute the error
@@ -176,17 +187,115 @@ def create_factorization_model(training_matrix,k,N):
 		print loss
 
 
-
-
-
 	return P,Q
 
 
-#Function 
+""" Evaluation Scheme for the model """
+#Function to generate AUC and AUPR curves
+def generate_graph(edge_scores,testing):
+	#Minimum score 
+	min_score = min(edge_scores)
+
+	#Maximum Score
+	max_score = max(edge_scores)
+	
+	current_network = [(edge[0],edge[1]) for edge in testing]
+
+	positive_edges = [(edge[0],edge[1]) for edge in testing if edge[2]==1]
+
+	const_aupr = float(len(positive_edges)) / float(len(testing))
+		
+	#Increment
+	increment = (max_score - min_score) / len(testing)
+	
+	precision = []
+	recall = []
+	fprs = []
+
+	
+	start = min_score
+
+	while start <= max_score:
+		#Extract the edge index above a certain threshold
+		indexes = [i for i in range(len(edge_scores)) if edge_scores[i]>=start]
+		
+		""" Edges above threshold are the correct ones """
+		#Extract the edges 
+		extracted_edges = [current_network[position]+(1,) for position in indexes]
+
+		""" All the extracted edges are true in nature or they hold the value of 1 """
+
+		#Precision - > How many results / edges are classified as correct
+		common = 0 
+
+		for edge in extracted_edges:
+			for link in positive_edges:
+				if edge[0] == link[0] and edge[1] == link[1]:
+					common += 1
+
+
+		precision.append(float(common) / float(len(extracted_edges)))
+		recall.append(float(common)/ float(len(positive_edges)))
+		fprs.append(float(len(extracted_edges) - common) / float(len(testing) - len(positive_edges)))
+
+		start += increment
+
+
+	AUPR_curve = metrics.auc(np.array(recall),np.array(precision))
+	AUC_curve = metrics.auc(np.array(fprs),np.array(recall))
+
+	#plt.plot(np.array(fprs),np.array(recall))
+	#plt.show()
+
+	#Plots
+	#fig, ax = plt.subplots()
+	#ax.plot(np.array(fprs),np.array(recall), c='black')
+	#line = mlines.Line2D([0, 1], [0, 1], color='red')
+	#transform = ax.transAxes
+	#line.set_transform(transform)
+	#ax.add_line(line)
+	#plt.show()
+
+	
+
+	return AUC_curve,AUPR_curve#,const_aupr
+
+
+
+#Function to extract the predicted scores
+def get_scores(predicted_matrix,testing_set,unique_tfs):
+
+	testing_set_scores = []
+
+	actual_labels = []
+
+	for edge in testing_set:
+		testing_set_scores.append(predicted_matrix[unique_tfs.index(edge[0])][unique_tfs.index(edge[1])])
+		actual_labels.append(edge[2])
+
+
+	#testing_set_scores = testing_set_scores / max(testing_set_scores)
+
+	#a,b  = generate_graph(testing_set_scores,testing_set)
+	score = metrics.roc_auc_score(actual_labels,testing_set_scores)
+	#print a
+	print score
+
+
+	#print len(actual_labels)
+	#print len(testing_set_scores)
+	#print actual_labels
+	#print testing_set_scores
+
+	return
+
+#Main Function 
 def main():
 	tf, data_matrix = create_data_matrix()
 
-	data_matrix = data_matrix.astype(float)
+	data_matrix = data_matrix.astype(float)	
+
+	#print mutual_info_score(temp_1,temp_2)	
 
 	#Ground Truth : Positive Interactions : (Regulator, Target)
 	positive_interactions = ground_truth()
@@ -202,22 +311,34 @@ def main():
 	#Unique Transcriptional Factors
 	unique_tfs = find_unique_tfs(positive_interactions)
 
+	positive_samples = [link + (1,) for link in positive_interactions]
+	negative_samples = [link + (-1,) for link in negative_interactions]
+
+	total_samples = positive_samples + negative_samples
+
+	random.shuffle(total_samples)
+
 	#Compute the matrix
 	main_matrix = np.zeros((len(unique_tfs),len(unique_tfs)))
 
 	#Ground Truth Matrix populated with initial scores
-	fill_matrix(main_matrix,data_matrix,unique_tfs)
+	fill_matrix(main_matrix,total_samples,unique_tfs)
+
+	
 
 	#Remove information pertaining to test set
 
 	#Split into Training and Testing Data
 	splitted_sample = split(total_samples)
 	splitted_sample = splitted_sample[:5]
+
+	
 	
 	AUC = []
 	AUPR = []
 	const = []
-
+	
+	
 	#for k in range(2,12):
 	for i in range(0,len(splitted_sample)):
 		testing_set = splitted_sample[i]
@@ -234,34 +355,18 @@ def main():
 
 		P, Q = create_factorization_model(training_matrix,10,len(unique_tfs))
 
+		#Matrix after training
+		predicted_matrix = np.matmul(P,Q)
+
+		#Get the scores for the testing set
+		auc = get_scores(predicted_matrix,testing_set,unique_tfs)
 
 
 		break
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+	
+	
+  
 	return
 
 
