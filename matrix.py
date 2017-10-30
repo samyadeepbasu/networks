@@ -8,6 +8,7 @@ from sklearn import metrics
 from sklearn.metrics.pairwise import rbf_kernel,polynomial_kernel,sigmoid_kernel,laplacian_kernel,chi2_kernel
 from scipy.stats import pearsonr, spearmanr
 from scipy import spatial
+import math
 
 #Function to Clean the data and create a training set
 def create_data_matrix():
@@ -125,8 +126,8 @@ def manipulate_matrix(filled_matrix,unique_tfs,testing_set):
 
 
 #Function to create a factorization model
-def create_factorization_model(training_matrix,k,N):
-	""" Split the matrix into two parts and train using GD to optimize the loss function """
+def create_factorization_model(training_matrix,k,N,data_matrix,unique_tfs):
+	""" Split the matrix into two parts and train using Stochastic Gradient Descent to optimize the loss function """
 
 	# K : Parameter for Matrix Factorization
 
@@ -135,10 +136,10 @@ def create_factorization_model(training_matrix,k,N):
 	Q = P.transpose()
 
 	#Number of steps for Gradient Descent -- In each turn the whole matrix will be updated
-	epochs = 5000
+	epochs = 500
 
 	#Learning Rate
-	learning_rate = 0.01
+	learning_rate = 0.0002
 
 	beta = 0.02
 
@@ -153,9 +154,11 @@ def create_factorization_model(training_matrix,k,N):
 						prediction += P[i][K]*Q[K][j]
 
 
+					#Add Mutual Information (Fm(xi,xj)) ---> Node Attribute Information
+					prediction += distance_information(data_matrix[unique_tfs[i]],data_matrix[unique_tfs[j]])
 
 					#Compute the error
-					error = training_matrix[i][j] - prediction
+					error = training_matrix[i][j] - math.tanh(prediction)
 
 					#Update for the Gradient Descent Step
 					for K in range(0,k):
@@ -172,7 +175,7 @@ def create_factorization_model(training_matrix,k,N):
 		for i in range(0,len(training_matrix)):
 			for j in range(0,len(training_matrix[0])):
 				#If the position is in the training set
-				if training_matrix[i][j] > 0:
+				if training_matrix[i][j] != 0:
 					#Compute the loss after update
 					positional_value = 0
 
@@ -323,7 +326,6 @@ def main():
 
 	#Ground Truth Matrix populated with initial scores
 	fill_matrix(main_matrix,total_samples,unique_tfs)
-
 	
 
 	#Remove information pertaining to test set
@@ -353,7 +355,7 @@ def main():
 
 		training_matrix = manipulate_matrix(main_matrix.copy(),unique_tfs,testing_set)
 
-		P, Q = create_factorization_model(training_matrix,10,len(unique_tfs))
+		P, Q = create_factorization_model(training_matrix,10,len(unique_tfs),data_matrix,unique_tfs)
 
 		#Matrix after training
 		predicted_matrix = np.matmul(P,Q)
