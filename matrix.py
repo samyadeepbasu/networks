@@ -9,6 +9,9 @@ from sklearn.metrics.pairwise import rbf_kernel,polynomial_kernel,sigmoid_kernel
 from scipy.stats import pearsonr, spearmanr
 from scipy import spatial
 import math
+import matplotlib.lines as mlines
+import matplotlib.transforms as mtransforms
+import matplotlib.pyplot as plt 
 
 #Function to Clean the data and create a training set
 def create_data_matrix():
@@ -136,7 +139,7 @@ def create_factorization_model(training_matrix,k,N,data_matrix,unique_tfs):
 	Q = P.transpose()
 
 	#Number of steps for Gradient Descent -- In each turn the whole matrix will be updated
-	epochs = 200
+	epochs = 350
 
 	#Learning Rate
 	learning_rate = 0.0001
@@ -281,6 +284,17 @@ def get_scores(predicted_matrix,testing_set,unique_tfs):
 
 	#a,b  = generate_graph(testing_set_scores,testing_set)
 	score = metrics.roc_auc_score(actual_labels,testing_set_scores)
+
+	fpr, tpr, thresholds = metrics.roc_curve(actual_labels,testing_set_scores,drop_intermediate=False)
+
+	fig, ax = plt.subplots()
+	ax.plot(np.array(fprs),np.array(recall), c='black')
+	line = mlines.Line2D([0, 1], [0, 1], color='red')
+	transform = ax.transAxes
+	line.set_transform(transform)
+	ax.add_line(line)
+	plt.show()
+
 	#print a
 	print score
 
@@ -355,7 +369,7 @@ def main():
 
 		training_matrix = manipulate_matrix(main_matrix.copy(),unique_tfs,testing_set)
 
-		P, Q = create_factorization_model(training_matrix,24,len(unique_tfs),data_matrix,unique_tfs)
+		P, Q = create_factorization_model(training_matrix,16,len(unique_tfs),data_matrix,unique_tfs)
 
 		#Matrix after training
 		predicted_matrix = np.matmul(P,Q)
@@ -363,6 +377,7 @@ def main():
 		#Get the scores for the testing set
 		auc = get_scores(predicted_matrix,testing_set,unique_tfs)
 
+		
 		AUC.append(auc)
 
 
