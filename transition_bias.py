@@ -217,29 +217,16 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 		for e in testing_set:
 			if e[0] == regulator:
 				truth.append(e[2])
-				prediction = 
+				prediction = np.matmul(W,expression_matrix[e[1]].reshape(1,-1).transpose())[0][0]
+				edge_scores.append(prediction)
 
-			
-
-
-
-
-
-
-
-			
 
 
 		
 		
 
-		break
-
-
-
-
-	
-
+	score = metrics.roc_auc_score(truth,edge_scores)
+	print score
 
 
 
@@ -293,6 +280,8 @@ def main():
 
 		#auc, aupr,const_aupr = create_model(training_set,testing_set,main_matrix,10)
 		auc = create_classification_model(training_set,testing_set,main_matrix)
+
+		
 
 		break
 
