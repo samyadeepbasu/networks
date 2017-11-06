@@ -175,6 +175,8 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 
 	edge_scores = []
 
+	truth = []
+
 	regulators = list(set([edge[0] for edge in training_set]))
 
 	""" Go to each local region of the graph and train the model """
@@ -187,7 +189,7 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 		#Initialise the weight matrix
 		W = np.random.rand(1,len(X[0]))
 
-		epochs = 100
+		epochs = 800
 
 		alpha = 0.001
 
@@ -199,21 +201,33 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 				#Update the weight
 				gradient = train_model(W,targets,edge,0.1)
 
-				W = W - alpha*gradient
+				W = W - alpha * gradient
 
+				
 
-
-				break
-
-
+			loss = 0
 			#Compute Loss
+			for edge in targets:
+				loss += math.pow((np.matmul(W,edge[0].reshape(1,-1).transpose())[0][0] - edge[1]),2)
+
+
+		
+
+		#Go to the local testing edges in the local region of the graph and predict scores
+		for e in testing_set:
+			if e[0] == regulator:
+				truth.append(e[2])
+				prediction = 
+
 			
 
 
 
 
 
-			break
+
+
+			
 
 
 		
