@@ -125,7 +125,7 @@ def train_model(W,targets,edge,lam):
 		prediction = np.matmul(W,e[0].reshape(1,-1).transpose())[0][0]
 		p += prediction
 
-		if e[1]==0:
+		if e[1]==-1:
 			p_negative += prediction
 
 		elif e[1] == 1:
@@ -150,7 +150,7 @@ def train_model(W,targets,edge,lam):
 				X_positive += e[0]
 
 
-			if e[1] == 0:
+			if e[1] == -1:
 				X_negative += e[0]
 
 
@@ -199,7 +199,7 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 			#Do a SGD after each edge
 			for edge in targets:
 				#Update the weight
-				gradient = train_model(W,targets,edge,0.1)
+				gradient = train_model(W,targets,edge,0.04)
 
 				W = W - alpha * gradient
 
@@ -222,15 +222,13 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 
 
 
-		
-		
 
 	score = metrics.roc_auc_score(truth,edge_scores)
 	print score
 
 
 
-	return 
+	return score
 
 
 #Function 
@@ -253,7 +251,7 @@ def main():
 	random.shuffle(negative_interactions)
 
 	positive_samples = [link + (1,) for link in positive_interactions]
-	negative_samples = [link + (0,) for link in negative_interactions]
+	negative_samples = [link + (-1,) for link in negative_interactions]
 
 	total_samples = positive_samples + negative_samples
 
@@ -266,6 +264,8 @@ def main():
 	#Split into Training and Testing Data
 	splitted_sample = split(total_samples)
 	splitted_sample = splitted_sample[:5]
+
+	AUC = []
 
 	for i in range(0,len(splitted_sample)):
 		testing_set = splitted_sample[i]
@@ -281,9 +281,16 @@ def main():
 		#auc, aupr,const_aupr = create_model(training_set,testing_set,main_matrix,10)
 		auc = create_classification_model(training_set,testing_set,main_matrix)
 
-		
+		AUC.append(auc)
 
-		break
+
+
+	print "Average"
+	print np.array(AUC)
+
+
+
+		
 
 
 
