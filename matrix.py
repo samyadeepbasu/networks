@@ -1,4 +1,4 @@
-""" Link Prediction as a Matrix Factorization Problem for Gene Regulatory Network """
+""" Link Prediction as a Matrix Factorization Problem by integrating expression data for Gene Regulatory Network """
 
 
 import numpy as np
@@ -35,9 +35,10 @@ def create_data_matrix():
 
 #Function to fill up the matrix before factorization
 def distance_information(a,b):
-	#return mutual_info_score(a,b)
+	return mutual_info_score(a,b)
 	#return spearmanr(a,b)[0]
-	return rbf_kernel(a.reshape(1,-1),b.reshape(1,-1))
+	#return pearsonr(a,b)[0]
+	#return rbf_kernel(a.reshape(1,-1),b.reshape(1,-1))
 
 
 #Function to find the unique transcriptional factors 
@@ -139,12 +140,12 @@ def create_factorization_model(training_matrix,k,N,data_matrix,unique_tfs):
 	Q = P.transpose()
 
 	#Number of steps for Gradient Descent -- In each turn the whole matrix will be updated
-	epochs = 350
+	epochs = 50
 
 	#Learning Rate
-	learning_rate = 0.0001
+	learning_rate = 0.001
 
-	beta = 0.04
+	beta = 0.05
 
 	for steps in range(0,epochs):
 		for i in range(0,len(training_matrix)):
@@ -158,15 +159,18 @@ def create_factorization_model(training_matrix,k,N,data_matrix,unique_tfs):
 
 
 					#Add Mutual Information (Fm(xi,xj)) ---> Node Attribute Information
-					prediction += distance_information(data_matrix[unique_tfs[i]],data_matrix[unique_tfs[j]])
+					sim_score = distance_information(data_matrix[unique_tfs[i]],data_matrix[unique_tfs[j]])
+					prediction *= sim_score
 
 					#Compute the error --> Non-linear transformation of prediction
-					error = training_matrix[i][j] - math.tanh(prediction)
+					error = training_matrix[i][j] - prediction #math.tanh(prediction)
 
 					#Update for the Gradient Descent Step
 					for K in range(0,k):
-						P[i][K] = P[i][K] + learning_rate * (error * Q[K][j] - beta*P[i][K])
-						Q[K][j] = Q[K][j] + learning_rate * (error * P[i][K] - beta*Q[K][j])
+						P[i][K] = P[i][K] + learning_rate * (sim_score*error*Q[K][j] - beta*P[i][K])
+						#Q[i][K] = P[i][K] + learning_rate * (error * Q[K][j] - beta*P[i][K])
+						#P[K][j] = Q[K][j] + learning_rate * (error * P[i][K] - beta*Q[K][j])
+						Q[K][j] = Q[K][j] + learning_rate * (sim_score*error* P[i][K] - beta*Q[K][j])
 
 
 
@@ -288,7 +292,7 @@ def get_scores(predicted_matrix,testing_set,unique_tfs):
 	fpr, tpr, thresholds = metrics.roc_curve(actual_labels,testing_set_scores,drop_intermediate=False)
 
 	fig, ax = plt.subplots()
-	ax.plot(np.array(fprs),np.array(recall), c='black')
+	ax.plot(np.array(fpr),np.array(tpr), c='black')
 	line = mlines.Line2D([0, 1], [0, 1], color='red')
 	transform = ax.transAxes
 	line.set_transform(transform)
@@ -369,7 +373,7 @@ def main():
 
 		training_matrix = manipulate_matrix(main_matrix.copy(),unique_tfs,testing_set)
 
-		P, Q = create_factorization_model(training_matrix,16,len(unique_tfs),data_matrix,unique_tfs)
+		P, Q = create_factorization_model(training_matrix,4,len(unique_tfs),data_matrix,unique_tfs)
 
 		#Matrix after training
 		predicted_matrix = np.matmul(P,Q)
