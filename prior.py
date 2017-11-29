@@ -339,7 +339,7 @@ def train(data_matrix,k):
 
 
 #Function to create classification model for each local region
-def create_classification_model(training,testing,data_matrix):
+def create_classification_model(training,testing,data_matrix,c,alpha):
 	""" Algorithm : For each edge in testing set
 					  -> Go to the local neighbourhood 
 					  -> Build a local classification model 
@@ -347,7 +347,7 @@ def create_classification_model(training,testing,data_matrix):
 	#True Labels	
 	true_labels = [edge[2] for edge in testing]
 
-
+	
 	
 	#Scores based on local classification model
 	edge_scores = []
@@ -370,8 +370,8 @@ def create_classification_model(training,testing,data_matrix):
 		temp = np.where(Y==1)
 		
 
-		
-		clf = svm.SVR(C=1, gamma=0.001,kernel='rbf')
+
+		clf = svm.SVR(C=c, gamma=alpha,kernel='rbf')
 		#clf = LinearRegression()
 		#clf = GradientBoostingRegressor(n_estimators=30)
 		#clf = Lasso(alpha=10)
@@ -386,8 +386,9 @@ def create_classification_model(training,testing,data_matrix):
 
 	score = metrics.roc_auc_score(true_labels,edge_scores)
 
-	print score
+	#print score
 
+	"""
 	fpr, tpr, thresholds = metrics.roc_curve(true_labels,edge_scores,drop_intermediate=False)
 
 	fig, ax = plt.subplots()
@@ -399,7 +400,7 @@ def create_classification_model(training,testing,data_matrix):
 	ax.set_ylabel('Recall')
 	ax.add_line(line)
 	plt.show()
-
+	"""
 
 
 	return score
@@ -672,31 +673,52 @@ def main():
 		AUPR = []
 		const = []
 
-		#for k in range(2,12):
-		for i in range(0,len(splitted_sample)):
-			testing_set = splitted_sample[i]
-			training_set_index = range(0,len(splitted_sample))
-			training_set_index.remove(i)
+		""" Parameters for Grid Searching """
+		C = []
+		Alpha = []
 
-			training_set = []
+		c_start = math.pow(2,-5)
+		Alpha_start = math.pow(2,-15)
 
-			for index in training_set_index:
-				training_set += splitted_sample[index]
+		for i in range(0,11):
+			C.append(c_start)
+			Alpha.append(Alpha_start)
+
+			c_start *= math.pow(2,2)
+			Alpha_start *= math.pow(2,2)
+
+
+		AUC_average_scores = []
+
+		for j in range(0,len(C)):
+			for i in range(0,len(splitted_sample)):
+				testing_set = splitted_sample[i]
+				training_set_index = range(0,len(splitted_sample))
+				training_set_index.remove(i)
+
+				training_set = []
+
+				for index in training_set_index:
+					training_set += splitted_sample[index]
 
 
 
-			#auc, aupr,const_aupr = create_model(training_set,testing_set,main_matrix,10)
-			auc = create_classification_model(training_set,testing_set,main_matrix)
+				#auc, aupr,const_aupr = create_model(training_set,testing_set,main_matrix,10)
+				auc = create_classification_model(training_set,testing_set,main_matrix,C[j],Alpha[j])
 
-			AUC.append(auc)
-			#AUPR.append(aupr)
+				AUC.append(auc)
+				#AUPR.append(aupr)
+				
 			
-			
 
 
 
-		print "Mean Score : "
-		print np.mean(np.array(AUC))
+			print "Mean Score : "
+			average_score = np.mean(np.array(AUC))
+			AUC_average_scores.append(average_score)
+
+			print average_score
+
 		#print ""
 		#AUC_total.append(np.mean(np.array(AUC)))
 		break
@@ -707,6 +729,7 @@ def main():
 
 	#plt.plot(X,AUC_total)
 	#plt.show()
+
 	
 		
 
