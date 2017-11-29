@@ -28,8 +28,6 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt 
 from sklearn.cluster import KMeans,AgglomerativeClustering
-from sklearn.metrics import silhouette_score, silhouette_samples
-from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics.pairwise import rbf_kernel,polynomial_kernel,sigmoid_kernel,laplacian_kernel,chi2_kernel
 from sklearn.ensemble import RandomForestRegressor,ExtraTreesRegressor, GradientBoostingRegressor
 from sklearn import metrics
@@ -45,6 +43,10 @@ from fastdtw import fastdtw
 import matplotlib.lines as mlines
 import matplotlib.transforms as mtransforms
 from sklearn import svm
+import tensorflow as tf 
+from sklearn.linear_model import LogisticRegression, LinearRegression, Lasso, Ridge,ElasticNet
+import networkx as nx
+
 
 
 ###############################################################################################################
@@ -53,13 +55,13 @@ from sklearn import svm
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data2/tf.txt","r")
+	tf_file = open("data3/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data2/data.txt","r")
+	exp_file = open("data3/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -73,7 +75,7 @@ def create_data_matrix():
 #Function to order cells by pseudo time
 def pseudo_time(data_matrix):
 	#Open the file corresponding to Pseudo Time Measurement
-	time_file = open('data2/time.txt','r')
+	time_file = open('data3/time.txt','r')
 	
 	#Extraction of Pseudo Time from the List
 	ordered_cells = [line.split()[1] for line in time_file.readlines()]
@@ -101,7 +103,7 @@ def pseudo_time(data_matrix):
 #Function to get a list of times
 def time():
 	#Time Measurements
-	time_series = open('data2/time.txt','r')
+	time_series = open('data3/time.txt','r')
 
 	times = [line.split()[1] for line in time_series.readlines()]
 
@@ -121,7 +123,7 @@ def time():
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data2.txt','r')
+	g_file = open('ground_truth/stamlab_for_data3.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- (Regulator --->  Target)
 	interactions = [ (int(line.split()[3]),int(line.split()[2])) for line in g_file.readlines()]
@@ -210,17 +212,130 @@ def find_minimum(a,b,c):
 def distance(current_target_expression,data_matrix,targets,i):
 	#return spearmanr(current_target_expression,data_matrix[targets[i]])[0]
 	#return spatial.distance.correlation(current_target_expression,data_matrix[targets[i]])
-	#return mutual_info_score(current_target_expression,data_matrix[targets[i]])
-	return rbf_kernel(current_target_expression.reshape(1,-1),data_matrix[targets[i]].reshape(1,-1))
+	#return 1/mutual_info_score(current_target_expression,data_matrix[targets[i]])
+	#return rbf_kernel(current_target_expression.reshape(1,-1),data_matrix[targets[i]].reshape(1,-1))
 	#return DTW_distance(current_target_expression,data_matrix[targets[i]])
 
 	#D = SquaredEuclidean(current_target_expression.reshape(1,-1),data_matrix[targets[i]].reshape(1,-1))
 	#sdtw = SoftDTW(D, gamma=1.0)
-	#distance, path = fastdtw(current_target_expression.reshape(1,-1),data_matrix[targets[i]].reshape(1,-1), dist=euclidean)
+	distance, path = fastdtw(current_target_expression.reshape(1,-1),data_matrix[targets[i]].reshape(1,-1), dist=euclidean)
 
 	#return 1/sdtw.compute()
 
-	#return 1/float(distance)
+	return 1/float(distance)
+
+
+
+#Function to train an autoencoder and generate a latent representation of the cells
+def train(data_matrix,k):
+	#Input without noise
+	input_data = data_matrix
+
+	#Output data
+	output_data = input_data
+
+	#Adding Noise to th
+	input_data = input_data + 0.3* np.random.random_sample((input_data.shape))
+
+	#Keep Probability for Dropouts
+	keep_prob = tf.placeholder(tf.float32)
+
+	#Number of Neurons in the Hidden Unit
+	n_hidden = k 
+
+	#Number of Samples
+	n_samples = input_data.shape[0]
+
+	#Number of Features / Number of Genes in the input layer
+	n_features = input_data.shape[1]
+
+	#Declaring the Tensorflow Variables - None => Can have any number of rows => (none X 100)
+	X = tf.placeholder(tf.float32,[None,n_features])
+
+	#Weights  (100 X n_hidden)
+	W_hidden = tf.Variable(tf.random_uniform((n_features,n_hidden)))
+
+	#Biases
+	b_hidden = tf.Variable(tf.zeros([n_hidden]))
+
+	#Hidden Layer Output  => (None X 20)
+	h = tf.nn.tanh(tf.matmul(X,W_hidden) + b_hidden)
+
+	#Adding Dropout
+	drop_out = tf.nn.dropout(h, keep_prob)
+	
+	#Output Layer Weights
+	W_output = tf.transpose(W_hidden)
+
+	#Output Layer Bias
+	b_output = tf.Variable(tf.zeros([n_features]))
+	
+	#Final Layer Output
+	prediction = tf.nn.tanh(tf.matmul(drop_out,W_output) + b_output)
+
+	#Actual Data
+	Y = tf.placeholder(tf.float32,[None,n_features])
+
+	#Compute the sparsity
+	sparsity = np.repeat([0.05], n_hidden).astype(np.float32)
+	
+	#Adding L2 penalty
+	regularizers = tf.nn.l2_loss(W_hidden) + tf.nn.l2_loss(W_output)# + tf.nn.l2_loss(b_hidden) + tf.nn.l2_loss(b_output)
+
+	#Calculation of Loss - Add a loss function and compute the mean of the loss along with L2 regularization
+	loss =  0.5 * tf.reduce_mean(tf.pow(tf.subtract(prediction,Y),2))  + 0.01 * regularizers
+
+	#Training using Gradient Descent
+	training = tf.train.AdamOptimizer(0.001).minimize(loss)
+
+	#Initialisation Step
+	init = tf.initialize_all_variables()
+
+	with tf.Session() as sess:
+		#Initialise Session Variables
+		sess.run(init)
+
+		Y_plt = []
+		X_plt = []
+
+		#Number of Rounds of Training
+		n_rounds = 5000
+
+		#Batch size -> Max Batch Size : 373
+		batch_size = 80
+
+		for i in range(n_rounds):
+			#Generate an array of random numbers from pool of 0 to n_samples
+			batch_indexes = np.random.randint(n_samples,size=batch_size)
+
+			#Input Data
+			input_x = input_data[batch_indexes][:]
+
+			#Output 
+			output_x = output_data[batch_indexes][:]
+
+			#Train the model
+			sess.run(training,feed_dict={X:input_x,Y:output_x,keep_prob:0.3})
+
+
+			if i%50 == 0:
+				Y_plt.append(sess.run(loss,feed_dict= {X:input_x,Y:output_x,keep_prob:0.3}))
+				print sess.run(loss,feed_dict= {X:input_x,Y:output_x,keep_prob:0.3})
+				
+				X_plt.append(i)
+
+		weights = sess.run(W_hidden)
+		biases = sess.run(b_hidden)
+
+
+
+	#plt.figure("Loss Plot")
+	plt.plot(np.array(X_plt),np.array(Y_plt))
+	plt.show()
+
+
+	return weights, biases 
+
 
 
 #Function to create classification model for each local region
@@ -233,8 +348,8 @@ def create_classification_model(training,testing,data_matrix):
 	true_labels = [edge[2] for edge in testing]
 
 
-    
-    #Scores based on local classification model
+	
+	#Scores based on local classification model
 	edge_scores = []
 
 	for edge in testing:
@@ -252,7 +367,14 @@ def create_classification_model(training,testing,data_matrix):
 
 		Y = np.array([target[1] for target in targets])
 
-		clf = svm.SVR(kernel='rbf')
+		temp = np.where(Y==1)
+		
+
+		
+		clf = svm.SVR(C=1, gamma=0.001,kernel='rbf')
+		#clf = LinearRegression()
+		#clf = GradientBoostingRegressor(n_estimators=30)
+		#clf = Lasso(alpha=10)
 		clf.fit(X,Y)
 
 		predict_score = clf.predict(data_matrix[edge[1]].reshape(1,-1))
@@ -273,12 +395,14 @@ def create_classification_model(training,testing,data_matrix):
 	line = mlines.Line2D([0, 1], [0, 1], color='red')
 	transform = ax.transAxes
 	line.set_transform(transform)
+	ax.set_xlabel('False Positive Rate')
+	ax.set_ylabel('Recall')
 	ax.add_line(line)
 	plt.show()
 
 
 
-	return
+	return score
 
 
 #Function to create and initialise the model 
@@ -328,8 +452,10 @@ def create_model(training,testing,data_matrix,k):
 	#Once each edge got a score - Move the threshold and generate a AUPR and AUC
 	auc, aupr,const_aupr = generate_graph(edge_scores,testing)
 
+	print auc
+
 		
-	return auc, aupr,const_aupr
+	return auc
 
 
 
@@ -456,14 +582,16 @@ def generate_graph(edge_scores,testing):
 	#plt.plot(np.array(fprs),np.array(recall))
 	#plt.show()
 
+
 	#Plots
+	"""
 	fig, ax = plt.subplots()
 	ax.plot(np.array(fprs),np.array(recall), c='black')
 	line = mlines.Line2D([0, 1], [0, 1], color='red')
 	transform = ax.transAxes
 	line.set_transform(transform)
 	ax.add_line(line)
-	plt.show()
+	plt.show() """
 
 	
 
@@ -476,6 +604,13 @@ def main():
 
 	data_matrix = data_matrix.astype(float)
 
+
+
+	x = len(data_matrix)
+	y = len(data_matrix[0])
+
+	#data_matrix = np.random.poisson(x,y)
+
 	#data_matrix = pseudo_time(data_matrix)
 
 	time_series = time()
@@ -484,6 +619,14 @@ def main():
 
 	main_matrix = data_matrix.copy()
 
+	#weights,biases = train(main_matrix,1000)
+
+	#new_matrix = np.matmul(main_matrix,weights) + biases 
+
+	#main_matrix = new_matrix
+
+
+	
 	AUC_total = []
 
 	for k in state_range:
@@ -503,10 +646,22 @@ def main():
 		random.shuffle(positive_interactions)
 		random.shuffle(negative_interactions)
 
+		#print positive_interactions
+
+		#g = nx.DiGraph()
+
+		#g.add_edges_from(positive_interactions)
+
+		#edge_centrality = nx.edge_betweenness_centrality(g)
+
+		#print edge_centrality
+
 		positive_samples = [link + (1,) for link in positive_interactions]
 		negative_samples = [link + (0,) for link in negative_interactions]
 
 		total_samples = positive_samples + negative_samples
+
+		random.shuffle(total_samples)
 
 
 		#Split into Training and Testing Data
@@ -531,17 +686,17 @@ def main():
 
 
 			#auc, aupr,const_aupr = create_model(training_set,testing_set,main_matrix,10)
-			create_classification_model(training_set,testing_set,main_matrix)
+			auc = create_classification_model(training_set,testing_set,main_matrix)
 
-			#AUC.append(auc)
+			AUC.append(auc)
 			#AUPR.append(aupr)
 			
 			
 
 
 
-
-		#print np.mean(np.array(AUC))
+		print "Mean Score : "
+		print np.mean(np.array(AUC))
 		#print ""
 		#AUC_total.append(np.mean(np.array(AUC)))
 		break
@@ -552,6 +707,7 @@ def main():
 
 	#plt.plot(X,AUC_total)
 	#plt.show()
+	
 		
 
 
