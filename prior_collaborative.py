@@ -243,10 +243,6 @@ def get_graph(edge_importances,interactions):
 					common += 1
 		
 
-		#if (float(common) / float(len(interactions))) == 0.483870967742:
-		#	print extracted_edges
-		#	return
-
 
 		precision.append(float(common) / float(len(extracted_edges)))
 		recall.append(float(common) / float(len(interactions)))
@@ -285,30 +281,14 @@ def get_graph(edge_importances,interactions):
 			nx.draw_networkx_edges(g,pos,edge_color = edgewidth)
 			plt.show()
 
-
-
-
-				
-
-
-
-			
-
-			#print float(common) / float(len(interactions))
-			break
-		
-
 		#Increment Step
 		threshold += increment*4
 	
-	"""
+
 	#Calculation for area 
 	AUC_curve = metrics.auc(np.array(fpr),np.array(recall))
 	#print AUC_curve
 	AUPR_curve = metrics.auc(np.array(recall),np.array(precision))
-
-	#print AUPR_curve
-
 
 	plt.plot(fpr,recall)
 	plt.xlabel('False Positive Rate')
@@ -322,9 +302,9 @@ def get_graph(edge_importances,interactions):
 
 	
 
-	return AUC_curve, AUPR_curve """
+	return AUC_curve, AUPR_curve 
 
-	return 
+
 
 
 def main():
@@ -354,24 +334,6 @@ def main():
 	#Calculate AUPR and AUC by moving the threshold
 	get_graph(edge_importances,interactions)
 
-	#AUC_list.append(AUROC)
-#	print AUC
-	
-
-
-	#print AUC_list
-
-	
-
-	
-
-
-
-
-
-
-
-	
 
 
 main()
