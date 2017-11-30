@@ -35,6 +35,7 @@ import matplotlib.lines as mlines
 import matplotlib.transforms as mtransforms
 
 
+
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
@@ -311,7 +312,6 @@ def train_model(training, testing):
 	return score
 
 
-
 #Function to train a SVM Model
 def SVM_model(training,testing):
 	training_vectors = np.array([vector[0] for vector in training])
@@ -320,11 +320,9 @@ def SVM_model(training,testing):
 	true_labels = np.array([vector[1] for vector in training])
 	testing_labels = np.array([vector[1] for vector in testing])
 
-	print len(np.where(true_labels==1)[0])
-	print len(np.where(true_labels==0)[0])
 
-	#SVM model using class imbalance penalty
-	clf = svm.SVC(kernel='rbf',class_weight={1: 1.44})
+	#SVM model
+	clf = svm.SVR(kernel='rbf')
 	clf.fit(training_vectors,true_labels)
 
 	predicted_labels = clf.predict(testing_vectors)
@@ -335,10 +333,6 @@ def SVM_model(training,testing):
 
 	precision, recall, thresholds = metrics.precision_recall_curve(testing_labels,predicted_labels)
 
-	print metrics.accuracy_score(testing_labels,predicted_labels)
-	print "#"
-
-	#print precision
     
 	#Plots
 	fig, ax = plt.subplots()
@@ -366,9 +360,11 @@ def main():
 	AUC_total = []
 
 	for k in range(15,90):
-		data_matrix, time_ordered = binning(main_matrix.transpose(),time_series,60)
+		data_matrix, time_ordered = binning(main_matrix.transpose(),time_series,100)
 
-		data_matrix = data_matrix.transpose()	
+		data_matrix = data_matrix.transpose()
+
+		print len(data_matrix)	
 
 		interactions = ground_truth()
 
@@ -392,25 +388,52 @@ def main():
 
 		#DTW_matrix = distance_matrix(total_set)
 
-		training_set = total_set[0: int(len(total_set)*0.8)]
+		""" 5 fold cross validation - Obtain scores for each fold """
 
-		testing_set = total_set[int(len(total_set)*0.8):]
+		length_single_set = int(0.2*len(total_set))
 
-		#AUC_score = train_model(training_set,testing_set)
-		AUC_score = SVM_model(training_set,testing_set)
-		print AUC_score
+		complete_set = []
+
+		start = 0
+		last = length_single_set
+
+		
+		for i in range(0,5):
+			complete_set.append(total_set[start:last])
+			start = last
+			last = last + length_single_set
+
+		splitted_sample = complete_set
+
+		#Selection of training and testing set
+		for i in range(0,len(splitted_sample)):
+			testing_set = splitted_sample[i]
+
+			#print testing_set
+			training_set_index = range(0,len(splitted_sample))
+			training_set_index.remove(i)
+
+			training_set = []
+
+			for index in training_set_index:
+				training_set += splitted_sample[index]
+
 		
 
-		AUC_total.append(AUC_score)
+		#AUC_score = train_model(training_set,testing_set)
+			AUC_score = SVM_model(training_set,testing_set)
+			print AUC_score
+			
+
+			AUC_total.append(AUC_score)
+			#break
+
+			
 		break
 
 	
 
-	#print AUC_total
-	print max(AUC_total)
-	#X = range(0,len(AUC_total))
-	#plt.plot(X,AUC_total)
-	#plt.show()
+
 	
 	return
 
