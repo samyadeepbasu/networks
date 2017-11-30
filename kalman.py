@@ -80,7 +80,7 @@ def apply_filter(time_matrix):
 		print current_measurement
 		print "#"
 
-	print len(new_state)
+	#print len(new_state)
 
 	temp = range(1,100)
 
@@ -141,15 +141,9 @@ def kalman_filter():
 	binning(normalized_matrix[0])
 
 	#Obtain the new measurements after applying the Kalman Filter
-	#new_measurements = apply_filter(normalized_matrix)
+	new_measurements = apply_filter(normalized_matrix)
 
 	#binning(normalized_matrix[0])
-
-
-
-	
-
-
 
 
 
