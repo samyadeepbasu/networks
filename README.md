@@ -6,4 +6,4 @@ the scripts associated with the project. For unsupervised learning, we have used
 selection and tree based models like Random Forests, Extra Trees and Gradient Boosting. 
 For supervised learning, we have used methods from the literature concerning graph based learning like 
 local classification models and matrix factorization to integrate global knowledge. 
-We also tried out deep learning architectures to learn the latent state of the cell.
+We also tried out deep learning architectures mainly denoising autoencoders to learn the latent state of the cell.
