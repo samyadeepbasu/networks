@@ -605,14 +605,9 @@ def main():
 
 	data_matrix = data_matrix.astype(float)
 
-
-
 	x = len(data_matrix)
 	y = len(data_matrix[0])
 
-	#data_matrix = np.random.poisson(x,y)
-
-	#data_matrix = pseudo_time(data_matrix)
 
 	time_series = time()
 
@@ -620,21 +615,10 @@ def main():
 
 	main_matrix = data_matrix.copy()
 
-	#weights,biases = train(main_matrix,1000)
 
-	#new_matrix = np.matmul(main_matrix,weights) + biases 
-
-	#main_matrix = new_matrix
-
-
-	
 	AUC_total = []
 
 	for k in state_range:
-
-		#data_matrix, time_ordered = binning(main_matrix.transpose(),time_series,80)
-
-		#data_matrix = data_matrix.transpose()	
 
 		#Ground Truth : Positive Interactions : (Regulator, Target)
 		positive_interactions = ground_truth()
@@ -646,16 +630,6 @@ def main():
 		random.shuffle(total_samples)
 		random.shuffle(positive_interactions)
 		random.shuffle(negative_interactions)
-
-		#print positive_interactions
-
-		#g = nx.DiGraph()
-
-		#g.add_edges_from(positive_interactions)
-
-		#edge_centrality = nx.edge_betweenness_centrality(g)
-
-		#print edge_centrality
 
 		positive_samples = [link + (1,) for link in positive_interactions]
 		negative_samples = [link + (0,) for link in negative_interactions]
@@ -677,10 +651,10 @@ def main():
 		C = []
 		Alpha = []
 
-		c_start = math.pow(2,-5)
-		Alpha_start = math.pow(2,-15)
+		c_start = math.pow(2,-1)
+		Alpha_start = math.pow(2,-11)
 
-		for i in range(0,11):
+		for i in range(0,50):
 			C.append(c_start)
 			Alpha.append(Alpha_start)
 
@@ -708,9 +682,6 @@ def main():
 
 				AUC.append(auc)
 				#AUPR.append(aupr)
-				
-			
-
 
 
 			print "Mean Score : "
@@ -719,20 +690,11 @@ def main():
 
 			print average_score
 
-		#print ""
-		#AUC_total.append(np.mean(np.array(AUC)))
-		break
 
 
-
-	#X = range(0,len(AUC_total))
-
-	#plt.plot(X,AUC_total)
-	#plt.show()
-
+		print AUC_average_scores.index(max(AUC_average_scores))
 	
-		
-
+		break
 
 
 
