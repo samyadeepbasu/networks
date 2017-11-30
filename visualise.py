@@ -82,12 +82,6 @@ def reduce_dimensions(matrix,times):
 	plt.scatter(X,y,c=times)
 	plt.show()
 
-	#y_temp = np.zeros(len(X))
-	#plt.figure(2)
-	#plt.scatter(X,y_temp,c=np.sort(times))
-	#plt.show()
-
-
 
 def main():
 	#Gene Expression Matrix - Not Normalized
