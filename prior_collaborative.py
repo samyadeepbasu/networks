@@ -324,8 +324,6 @@ def main():
 	
 	AUC_list = []
 
-	#for k in range(2,20):
-
 	k = 10
 
 	#Edge importances based on local neighbourhood
