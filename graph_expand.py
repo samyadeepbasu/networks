@@ -1,8 +1,6 @@
-""" Algorithm to reconstruct regulatory networks """
-
+""" Algorithm to reconstruct regulatory networks by learning the latent features associated with a node using Deep Learning Models"""
 
 #############################################################################################################
-
 
 #Libraries
 import math
@@ -37,13 +35,13 @@ from sklearn.linear_model import LogisticRegression, LinearRegression, Lasso, Ri
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data3/tf.txt","r")
+	tf_file = open("data2/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data3/data.txt","r")
+	exp_file = open("data2/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -69,7 +67,7 @@ def find_unique_tfs(interactions):
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data3.txt','r')
+	g_file = open('ground_truth/stamlab_for_data2.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- (Regulator --->  Target)
 	interactions = [ (int(line.split()[3]),int(line.split()[2])) for line in g_file.readlines()]
@@ -101,6 +99,8 @@ def get_negative_interactions(positive_interactions):
 #Function to generate the similarity measurement
 def similarity(vec1,vec2):
 	return rbf_kernel(vec1.reshape(1,-1),vec2.reshape(1,-1))
+	
+	#return mutual_info_score(vec1,vec2)
 
 
 #Convert Data into Gaussian Distribution before passing to AutoEncoder
@@ -140,7 +140,7 @@ def train(data_matrix,k):
 	output_data = input_data
 
 	#Adding Noise to th
-	input_data = input_data + 0.4 * np.random.random_sample((input_data.shape))
+	input_data = input_data + 0.1* np.random.random_sample((input_data.shape))
 
 	#Keep Probability for Dropouts
 	keep_prob = tf.placeholder(tf.float32)
@@ -185,7 +185,7 @@ def train(data_matrix,k):
 	sparsity = np.repeat([0.05], n_hidden).astype(np.float32)
 	
 	#Adding L2 penalty
-	regularizers = tf.nn.l2_loss(W_hidden) + tf.nn.l2_loss(W_output)# + tf.nn.l2_loss(b_hidden) + tf.nn.l2_loss(b_output)
+	regularizers = tf.nn.l2_loss(W_hidden) + tf.nn.l2_loss(W_output) + tf.nn.l2_loss(b_hidden) + tf.nn.l2_loss(b_output)
 
 	#Calculation of Loss - Add a loss function and compute the mean of the loss along with L2 regularization
 	loss =  0.5 * tf.reduce_mean(tf.pow(tf.subtract(prediction,Y),2))  + 0.01 * regularizers
@@ -207,7 +207,7 @@ def train(data_matrix,k):
 		n_rounds = 5000
 
 		#Batch size -> Max Batch Size : 373
-		batch_size = 35
+		batch_size = 30
 
 		for i in range(n_rounds):
 			#Generate an array of random numbers from pool of 0 to n_samples
@@ -242,43 +242,13 @@ def train(data_matrix,k):
 	return weights, biases 
 
 
+def get_scores(total_samples,test_graph,data_matrix,similarity_matrix,unique_tfs):
+	reduced_matrix = similarity_matrix
 
-#Function to create a graph
-def create_graph(total_samples,test_graph,data_matrix):
-	#Regulators
-	similarity_matrix = []
+	#weights, biases = train(similarity_matrix,100)
 
-	#Create a training graph for the positive interactions
-	unique_tfs = find_unique_tfs(total_samples)
+	#reduced_matrix = np.matmul(similarity_matrix,weights) + biases
 
-	for gene in unique_tfs:
-		#Extract it's neighbours
-		vector = np.zeros((len(unique_tfs)))
-
-		for neighbour in total_samples:
-			if neighbour[0] == gene:
-				#Get the target 
-				target_index = unique_tfs.index(neighbour[1])
-
-				#Get the similarity
-				vector[target_index] = similarity(data_matrix[gene],data_matrix[neighbour[1]])
-
-
-
-		similarity_matrix.append(vector)
-
-
-	similarity_matrix = np.array(similarity_matrix)
-
-	#Convert into Normal Distribution
-	converted_matrix = gaussian(similarity_matrix.copy())
-	#converted_matrix = similarity_matrix.copy()
-
-	#Get a latent representation of data -> Parameters : Number of Hidden Units
-	weights, biases = train(converted_matrix,10)
-
-	#Matrix with the Node Embeddings
-	reduced_matrix = np.matmul(converted_matrix,weights) + biases
 
 	edge_scores = []
 
@@ -302,15 +272,45 @@ def create_graph(total_samples,test_graph,data_matrix):
 		#clf = svm.SVR(kernel='rbf')
 		#clf = LinearRegression()
 		#clf = GradientBoostingRegressor(n_estimators=30)
-		clf = Lasso()
+		clf = Lasso(alpha=10)
 		clf.fit(X,Y)
 		predict_score = clf.predict(current_target_expression.reshape(1,-1))
 
-		edge_scores.append(predict_score[0])
+		""" Local Model """
+
+		n_h = []
+
+		#Local model for classification
+		for link in total_samples:
+			if link[0] == regulator:
+				n_h.append((data_matrix[link[1]],link[2]))
+
+
+		X = np.array([target[0] for target in n_h])
+
+		Y = np.array([target[1] for target in n_h])
+
+		temp = np.where(Y==1)
+		
+
+		#clf = svm.SVR(C=100,kernel='rbf')
+		#clf = LinearRegression()
+		#clf = GradientBoostingRegressor(n_estimators=30)
+		clf = Lasso(alpha=10)
+		clf.fit(X,Y)
+
+		predict_score_2 = clf.predict(data_matrix[edge[1]].reshape(1,-1))
+
+		net_score = float(predict_score[0] + predict_score_2[0]) / 2
+
+		#edge_scores.append(predict_score[0])
+
+		edge_scores.append(net_score)
 
 
 
 	edge_scores = np.array(edge_scores)
+	print edge_scores
 
 	true_labels = [edge[2] for edge in test_graph]
 
@@ -330,6 +330,63 @@ def create_graph(total_samples,test_graph,data_matrix):
 	plt.show()
 
 	return score
+
+
+	
+
+
+#Function to create a graph
+def create_graph(total_samples,data_matrix):
+	#Regulators
+	similarity_matrix = []
+
+	#Create a training graph for the positive interactions
+	unique_tfs = find_unique_tfs(total_samples)
+
+	print len(total_samples)
+
+	for gene in unique_tfs:
+		#Extract it's neighbours
+		vector = np.zeros((len(unique_tfs)))
+
+		for neighbour in total_samples:
+			if neighbour[0] == gene and neighbour[2]==1:
+				#Get the target 
+				target_index = unique_tfs.index(neighbour[1])
+
+				#Get the similarity
+				vector[target_index] = 1 #similarity(data_matrix[gene],data_matrix[neighbour[1]])
+
+
+
+
+
+		similarity_matrix.append(vector)	
+
+
+	similarity_matrix = np.array(similarity_matrix)
+	print similarity_matrix
+
+	#Split into Training and Testing Data
+	splitted_sample = split(total_samples)
+	splitted_sample = splitted_sample[:5]
+
+
+	AUC = []
+
+	for i in range(0,len(splitted_sample)):
+		testing_set = splitted_sample[i]
+		training_set_index = range(0,len(splitted_sample))
+		training_set_index.remove(i)
+		training_set = []
+		for index in training_set_index:
+			training_set += splitted_sample[index]
+
+		AUC.append(get_scores(training_set,testing_set,data_matrix,similarity_matrix,unique_tfs))
+
+
+
+	return AUC
 
 
 def main():
@@ -353,31 +410,11 @@ def main():
 	splitted_sample = split(total_samples)
 	splitted_sample = splitted_sample[:5]
 
-	AUC = []
+	auc = create_graph(total_samples,data_matrix)
 
-	#for k in range(2,12):
-	for i in range(0,len(splitted_sample)):
-		testing_set = splitted_sample[i]
-		training_set_index = range(0,len(splitted_sample))
-		training_set_index.remove(i)
-		training_set = []
-		for index in training_set_index:
-			training_set += splitted_sample[index]
-
-		AUC.append(create_graph(training_set,testing_set,data_matrix))
-
-
-
-	print np.mean(np.array(AUC))
+	print np.mean(np.array(auc))
 
 	
-
-
-
-
-
-
-
 
 	return
 
