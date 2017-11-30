@@ -36,7 +36,9 @@ def create_data_matrix():
 #Visualise the clusters
 def visualise(data_matrix,color):
 	#Reduce Dimensions using PCA
-	pca = KernelPCA(n_components=2).fit_transform(data_matrix)
+	#pca = FastICA(n_components=2).fit_transform(data_matrix)
+	#pca = Isomap(n_components=2).fit_transform(data_matrix)
+	pca = TSNE(n_components=2).fit_transform(data_matrix)
 	X = pca[:,0]
 	Y = pca[:,1]
 	color_map = [0,2,5,20,22]
@@ -233,7 +235,10 @@ def cluster_centres(reduce_dim,times):
 
 	""" Construction of MST without using Prior Knowledge about Cell Collection, but prior knowledge about cell collection used in clustering """
 	#MST Connections with minimum weight
-	connections = get_minimum_spanning_tree(cluster_centres,unique_labels)
+	#connections = get_minimum_spanning_tree(cluster_centres,unique_labels)
+	connections = [(0,1),(1,2),(2,3),(3,4)]
+
+	print connections
 
 	#Create line segments
 	line_segments = []
@@ -316,18 +321,23 @@ def get_projections(lines,cluster_centre,unique_labels,times,matrix):
 
 		projections.append(np.array(ns))		
 
-
+    
 	projections = np.array(projections)
+
+	print lines 
 
 	X = projections[:,0]
 	Y = projections[:,1]
-
+	
 	plt.scatter(X,Y,c=times, s=130,alpha=0.4)
 	plt.show()
 	#plt.clf()
 
-	""" Projection of branches with the starting point mentioned """
 	
+	
+	#When doing in an unsupervised way
+	""" Projection of branches with the starting point mentioned """
+	"""
 	#Known Biological Knowledge
 	starting_point = (cluster_centre[0][0],cluster_centre[0][1])
 
@@ -379,7 +389,7 @@ def get_projections(lines,cluster_centre,unique_labels,times,matrix):
 	plt.show()
 	
 	#plt.scatter(old_projections[:,0],old_projections[:,1],s=130,alpha=0.4)
-
+	"""
 	return
 
 
@@ -408,18 +418,6 @@ def main():
 	data_matrix = data_matrix.astype(float)
 	data_matrix = data_matrix.transpose()
 	old_matrix = data_matrix.copy()
-
-	#visualise(data_matrix)
-	
-	#Convert into Normal Distribution
-	#data_matrix = gaussian(data_matrix)
-
-	#Get a latent representation of data -> Parameters : Number of Hidden Units
-	#weights, biases = train(data_matrix,500)
-
-	#reduced_matrix = np.matmul(data_matrix,weights) + biases
-	
-	#temp_matrix = PCA(n_components=5).fit_transform(old_matrix)
 	
 	times = actual_cell_time()	
 
@@ -432,21 +430,13 @@ def main():
 	#weights, biases = train(temp_deep,2)
 
 	#reduced_matrix = np.matmul(temp_deep,weights) + biases
-
-
 	
 	lines, cluster_centre, unique_labels = cluster_centres(reduce_dim,times)
 	
 	#Get Projections for the points on the main line
 	get_projections(lines,cluster_centre,unique_labels,times,reduce_dim)
 
-	monocle_time()
-
-
-	
-
-	#print actual_cell_time()
-	#monocle_time()
+	monocle_time()	
 
 	#projection_points = get_projections(reduce_dim,lines)
 	
@@ -463,11 +453,6 @@ def main():
 
 
 	return 
-
-	#plt.scatter(np.array([0,1,2,3,4]),np.array([0,1,2,3,4]),c=np.array([0,4,10,40,44]))
-	#plt.show()
-
-
 
 
 
