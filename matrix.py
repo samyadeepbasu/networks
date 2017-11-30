@@ -140,7 +140,7 @@ def create_factorization_model(training_matrix,k,N,data_matrix,unique_tfs):
 	Q = P.transpose()
 
 	#Number of steps for Gradient Descent -- In each turn the whole matrix will be updated
-	epochs = 50
+	epochs = 20
 
 	#Learning Rate
 	learning_rate = 0.001
@@ -160,10 +160,11 @@ def create_factorization_model(training_matrix,k,N,data_matrix,unique_tfs):
 
 					#Add Mutual Information (Fm(xi,xj)) ---> Node Attribute Information
 					sim_score = distance_information(data_matrix[unique_tfs[i]],data_matrix[unique_tfs[j]])
-					prediction *= sim_score
+					#prediction *= sim_score
+					prediction += distance_information(data_matrix[unique_tfs[i]],data_matrix[unique_tfs[j]])
 
 					#Compute the error --> Non-linear transformation of prediction
-					error = training_matrix[i][j] - prediction #math.tanh(prediction)
+					error = training_matrix[i][j] - math.tanh(prediction) #math.tanh(prediction)
 
 					#Update for the Gradient Descent Step
 					for K in range(0,k):
@@ -268,7 +269,7 @@ def generate_graph(edge_scores,testing):
 
 	
 
-	return AUC_curve,AUPR_curve#,const_aupr
+	return AUC_curve,AUPR_curve
 
 
 
@@ -283,9 +284,6 @@ def get_scores(predicted_matrix,testing_set,unique_tfs):
 		testing_set_scores.append(predicted_matrix[unique_tfs.index(edge[0])][unique_tfs.index(edge[1])])
 		actual_labels.append(edge[2])
 
-
-	#testing_set_scores = testing_set_scores / max(testing_set_scores)
-
 	#a,b  = generate_graph(testing_set_scores,testing_set)
 	score = metrics.roc_auc_score(actual_labels,testing_set_scores)
 
@@ -299,14 +297,8 @@ def get_scores(predicted_matrix,testing_set,unique_tfs):
 	ax.add_line(line)
 	plt.show()
 
-	#print a
+	
 	print score
-
-
-	#print len(actual_labels)
-	#print len(testing_set_scores)
-	#print actual_labels
-	#print testing_set_scores
 
 	return score
 
@@ -387,10 +379,6 @@ def main():
 
 
 	print np.mean(np.array(AUC))
-
-
-		#break
-
 	
 	
   
