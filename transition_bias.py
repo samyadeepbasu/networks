@@ -32,13 +32,13 @@ import networkx as nx
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data2/tf.txt","r")
+	tf_file = open("data3/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data2/data.txt","r")
+	exp_file = open("data3/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -53,7 +53,7 @@ def create_data_matrix():
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data2.txt','r')
+	g_file = open('ground_truth/stamlab_for_data3.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- (Regulator --->  Target)
 	interactions = [ (int(line.split()[3]),int(line.split()[2])) for line in g_file.readlines()]
@@ -112,6 +112,50 @@ def split(total_samples):
 
 
 	return chunks	
+
+
+#Function to train the model using a different regularization function
+def train_model_2(W,targets,edge,lam):
+	#Positive Edges in the training sample
+	positive_edges = [edge for edge in targets if edge[1]==1]
+
+	#Negative Edges in the training sample
+	negative_edges = [edge for edge in targets if edge[1]==-1]
+
+	p = 0
+
+	X_total = 0
+
+	#Calculate the total score
+	for e in targets:
+		prediction = np.matmul(W,e[0].reshape(1,-1).transpose())[0][0]
+		p += prediction
+
+		X_total += e[0]
+
+
+	total_derivative = 0
+
+	for e1 in positive_edges:
+		for e2 in negative_edges:
+			p_i = np.matmul(W,e1[0].reshape(1,-1).transpose())[0][0]
+			p_j = np.matmul(W,e2[0].reshape(1,-1).transpose())[0][0]
+
+			if p_i < p_j :
+				p_i_derivative = (p*e1[0] - p_i*X_total)/ (p*p)
+				p_j_derivative = (p*e2[0] - p_j*X_total)/(p*p)
+
+				total_derivative += (p_i_derivative - p_j_derivative)
+
+
+
+
+	gradient =  2*W[0] + lam*total_derivative
+
+	return gradient.reshape(1,-1)
+
+
+
 
 #Function to train the model using Stochastic Gradient Descent and Biasing via Transition Probability
 def train_model(W,targets,edge,lam):
@@ -189,7 +233,7 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 		#Initialise the weight matrix
 		W = np.random.rand(1,len(X[0]))
 
-		epochs = 800
+		epochs = 1000
 
 		alpha = 0.001
 
@@ -199,7 +243,7 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 			#Do a SGD after each edge
 			for edge in targets:
 				#Update the weight
-				gradient = train_model(W,targets,edge,0.04)
+				gradient = train_model(W,targets,edge,0.01)
 
 				W = W - alpha * gradient
 
@@ -211,7 +255,7 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 				loss += math.pow((np.matmul(W,edge[0].reshape(1,-1).transpose())[0][0] - edge[1]),2)
 
 
-		
+			print loss
 
 		#Go to the local testing edges in the local region of the graph and predict scores
 		for e in testing_set:
@@ -224,9 +268,19 @@ def create_classification_model(training_set,testing_set,expression_matrix):
 
 
 	score = metrics.roc_auc_score(truth,edge_scores)
+	fpr, tpr, thresholds = metrics.roc_curve(truth,edge_scores,drop_intermediate=False)
 	print score
 
-
+	fig, ax = plt.subplots()
+	ax.plot(np.array(fpr),np.array(tpr), c='black')
+	line = mlines.Line2D([0, 1], [0, 1], color='red')
+	transform = ax.transAxes
+	line.set_transform(transform)
+	ax.set_xlabel('False Positive Rate')
+	ax.set_ylabel('Recall')
+	ax.add_line(line)
+	plt.show()
+	
 
 	return score
 
@@ -286,14 +340,7 @@ def main():
 
 
 	print "Average"
-	print np.array(AUC)
-
-
-
-		
-
-
-
+	print np.mean(np.array(AUC))
 
 
 	return
