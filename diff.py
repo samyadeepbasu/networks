@@ -16,20 +16,22 @@ from sklearn import metrics
 import networkx as nx
 from noise_reduction import clustered_state
 from sklearn.linear_model import Lars
+from sklearn.metrics import mutual_info_score
 from numpy import inf
 from order import order_time
-
+import matplotlib.lines as mlines
+import matplotlib.transforms as mtransforms
 
 #Function to Clean the data and create a training set
 def create_data_matrix():
 	#Open the file for transcription factors
-	tf_file = open("data2/tf.txt","r")
+	tf_file = open("data3/tf.txt","r")
 
 	#Transcription Factors List
 	tf_list = [factor[:len(factor)-1] for factor in tf_file.readlines()]
 
 	#Gene Expression Matrix creation
-	exp_file = open("data2/data.txt","r")
+	exp_file = open("data3/data.txt","r")
 	
 	#Split the lines into list from the file and storage in list
 	data_matrix = [row[:len(row)-1].split('\t') for row in exp_file.readlines()]	
@@ -43,7 +45,7 @@ def create_data_matrix():
 #Function to order cells by pseudo time
 def pseudo_time(data_matrix):
 	#Open the file corresponding to Pseudo Time Measurement
-	time_file = open('data2/time.txt','r')
+	time_file = open('data3/time.txt','r')
 	
 	#Extraction of Pseudo Time from the List
 	ordered_cells = [line.split()[1] for line in time_file.readlines()]
@@ -71,7 +73,7 @@ def pseudo_time(data_matrix):
 #Function to get a list of times
 def time():
 	#Time Measurements
-	time_series = open('data2/time.txt','r')
+	time_series = open('data3/time.txt','r')
 
 	times = [line.split()[1] for line in time_series.readlines()]
 
@@ -86,6 +88,7 @@ def time():
 
 
 	return normalised_time
+
 
 
 #Extract the Top Regulators for Each Gene
@@ -113,26 +116,58 @@ def create_model(state_matrix,transcription_factors,time_series):
 		#Remove the corresponding column from the training set
 		[expression.remove(expression[i]) for expression in X]
 
+
+		#Compute Mutual information
+
 		""" Feature Selection using Random Forests / Extra Trees / Gradient Boosting Regressor """
 
+	
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
 		#forest_regressor = DecisionTreeRegressor(random_state = 0)
-		#forest_regressor = RandomForestRegressor(n_estimators = 1000,criterion = 'mse')
+		forest_regressor = RandomForestRegressor(n_estimators = 1,criterion = 'mse')
 		#forest_regressor = ExtraTreesRegressor(n_estimators = 700 ,criterion = 'mse')   #Extra Trees - Randomized Splits
 
-		forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.09,n_estimators=1200,random_state=42) #Gradient Boosting with least square
+		#forest_regressor = GradientBoostingRegressor(loss='ls',learning_rate=0.09,n_estimators=1200,random_state=42) #Gradient Boosting with least square
+
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
 
 		#Extract the important features corresponding to a particular gene
-		important_features = forest_regressor.feature_importances_
+		important_features = forest_regressor.feature_importances_  
 
 		#Regulators for the Network
 		regulators[transcription_factors[i]] = important_features	
 		
 
 	
+	return regulators
+
+
+def mutual_information_model(state_matrix,transcription_factors):
+
+	regulators = {}
+	#For each gene compute a vector with the mutual information values
+	for i in range(0,len(transcription_factors)):
+
+		positions = range(0,len(transcription_factors))
+
+		positions.remove(i)
+
+		feature_importances = []
+
+		for element in positions:
+			#Compute Mutual information
+			feature_importances.append(mutual_info_score(state_matrix[i],state_matrix[element]))
+
+
+		feature_importances = np.array(feature_importances)
+
+		regulators[transcription_factors[i]] = feature_importances
+
+
+
+
 	return regulators
 
 
@@ -221,7 +256,7 @@ def top_regulators(regulators,threshold,transcription_factors):
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data2.txt','r')
+	g_file = open('ground_truth/stamlab_for_data3.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- Target,Regulator
 	interactions = [ (int(line.split()[2]),int(line.split()[3])) for line in g_file.readlines()]
@@ -242,9 +277,6 @@ def get_graph(edges,ground_truth,actual_tf):
 	for i in range(0,len(edges)):
 		if edges[i][0] in actual_tf and edges[i][1] in actual_tf:
 			temp.append(edges[i])
-
-
-
 	
 	common = 0
 	
@@ -255,7 +287,6 @@ def get_graph(edges,ground_truth,actual_tf):
 				common += 1
 
 	
-
 	if len(temp) == 0 :
 		return 0,0,0
 	
@@ -396,39 +427,17 @@ def main():
 	#Transcription Factors and Data Matrix
 	transcription_factors, data_matrix = create_data_matrix()
 
-	#data_matrix = np.delete(data_matrix,0,axis=1) #Removal of first column -- Irrelevant
-
-	#Order the cells using Pseudo Time
-	ordered_matrix = pseudo_time(data_matrix)
-
-	#Transpose the matrix 
-	state_matrix = ordered_matrix.transpose()
-
-	time_series = time()	
-
+	#Transcription Factors - Unique
 	tf_no_edges = find_tf(transcription_factors)	
-	print len(tf_no_edges)
 
-	
-	state_matrix, time_series = binning(state_matrix,time_series,90)
-
-	#Impute in the matrix
-	#state_matrix = impute(state_matrix)
-	
-	#Conversion into log
-	#state_matrix = np.log(state_matrix)
-
-	#Replace -infinity values with zero    
-	#state_matrix[state_matrix == -inf] = 0
 	
 	#Normalise the matrix
-	normalised_state_matrix =  state_matrix #normal(state_matrix)#normalise(state_matrix)		
-
+	normalised_state_matrix =  data_matrix.astype(float)  #normal(state_matrix)#normalise(state_matrix)		
 	
-		
 	#Churn out the top regulators from each gene
-	regulators = create_model(normalised_state_matrix,transcription_factors,time_series)
-
+	#regulators = create_model(normalised_state_matrix,transcription_factors,time_series)
+	#regulators = create_model_LARS(normalised_state_matrix,transcription_factors)
+	regulators = mutual_information_model(normalised_state_matrix,transcription_factors)
 	
 	start = 1
 
@@ -467,17 +476,21 @@ def main():
 
 	#AUROC Curve
 	#plt.figure(1)
-	plt.plot(np.array(fprs),np.array(recalls))
-	plt.show()
+	#plt.plot(np.array(fprs),np.array(recalls))
+	#plt.show()
 
-	#AUPR Curve
-	plt.plot(np.array(recalls),np.array(precisions))
+	fig, ax = plt.subplots()
+	ax.plot(np.array(fprs),np.array(recalls), c='black')
+	line = mlines.Line2D([0, 1], [0, 1], color='red')
+	transform = ax.transAxes
+	line.set_transform(transform)
+	ax.add_line(line)
 	plt.show()
 
 	
+	return a,b 
 
-	return a,b
-
+	
 	
 def get_total():
 	AUC = []
@@ -492,14 +505,6 @@ def get_total():
 	print AUC
 	print AUPR
 	
-
-
-
-
-
-
-	
-
 
 
 #get_total()
