@@ -113,11 +113,11 @@ def create_model(state_matrix,transcription_factors):
 
 		for j in range(1,len(state_matrix)):
 			X.append(state_matrix[j-1].tolist())
-			y.append(state_matrix[j][i])
+			y.append(state_matrix[j][i] - state_matrix[j-1][i])
 
 
 		#Initialise the model using Random Forests and Extract the Top Regulators for each Gene
-		forest_regressor = RandomForestRegressor(n_estimators = 100,criterion = 'mse',n_jobs = -1)
+		forest_regressor = RandomForestRegressor(n_estimators = 300,criterion = 'mse')
 
 		#Fit the training data into the Model
 		forest_regressor.fit(X,y)
@@ -144,7 +144,7 @@ def create_model_LARS(state_matrix,transcription_factors):
 
 		for j in range(1,len(state_matrix)):
 			X.append(state_matrix[j-1].tolist())
-			y.append(state_matrix[j][i])
+			y.append(state_matrix[j][i] - state_matrix[j-1][i])
 
 
 		#Initialise the LARS Model
@@ -167,7 +167,7 @@ def create_model_LARS(state_matrix,transcription_factors):
 #Function to get the ground truth for the dataset
 def ground_truth():
 	#Open and Initialise the File
-	g_file = open('ground_truth/stamlab_for_data2.txt','r')
+	g_file = open('ground_truth/stamlab_for_data3.txt','r')
 
 	#Conversion of the interactions in appropriate format  -- (Regulator,Target)
 	interactions = [ (int(line.split()[3]),int(line.split()[2])) for line in g_file.readlines()]
@@ -196,7 +196,7 @@ def generate_PR_score(regulators,transcription_factors,real_interactions):
 	fpr = []
 
 	#Start threshold 
-	threshold = 0.0001
+	threshold = 0.00005
 
 
 	for i in range(0,500):
@@ -243,18 +243,13 @@ def generate_PR_score(regulators,transcription_factors,real_interactions):
 
 	fpr = np.array(fpr)
 
-	#print precision
-	#print recall
-	#print fpr
-
-
 	#area = calculate_area(precision,recall)
 	area = calculate_area(recall,fpr)
 
 	print area
 
-	#plt.plot(recall,precision)
-	plt.plot(fpr,recall)
+	plt.plot(recall,fpr)
+	#plt.plot(precision,recall)
 	plt.show()   
 
 
@@ -295,34 +290,16 @@ def main():
 	""" Commented : States without Clustering cells at the same time points  """
 
 	#Order the Matrix by Pseudo Time
-	##ordered_matrix = pseudo_time(data_matrix)
-
-	#ordered_matrix = data_matrix
-
-	#Normalise the Matrix
-	#normalized_matrix = normalize(ordered_matrix)
-
-	#Create the Equations for Model
-	#state_matrix = create_states(normalized_matrix,transcription_factors,5)
-
+	ordered_matrix = pseudo_time(data_matrix)
 	
     #State Matrix Formed by clustering the cells at same time points
-	state_matrix = clustered_state(360)
+	state_matrix = clustered_state(370)
 
 	#Fit the model using Random Forests and Lasso Regression -- Returns a dictionary containing feature score for each gene
 	regulators = create_model(state_matrix,transcription_factors)
 	
 
 	""" Lars """
-	#Lars
-	#regulators = create_model_LARS(state_matrix,transcription_factors)
-
-	#min_threshold, max_threshold = get_min_threshold(regulators)
-
-	#print min_threshold
-	#print max_threshold
-
-	#update_step = (max_threshold - min_threshold) / 500
 
     #Ground Truth for comparison
 	real_interactions = ground_truth()
